@@ -65,10 +65,14 @@ int main()
 	ScriptNode scriptNode;
 	EnumerationErrors errors;
 
+    // Load config file
 	const char *fn = NULL;
-	if	(fileExists(SAMPLE_XML_PATH)) fn = SAMPLE_XML_PATH;
-	else if (fileExists(SAMPLE_XML_PATH_LOCAL)) fn = SAMPLE_XML_PATH_LOCAL;
-	else {
+	if	(fileExists(SAMPLE_XML_PATH))
+        fn = SAMPLE_XML_PATH;
+	else if (fileExists(SAMPLE_XML_PATH_LOCAL))
+        fn = SAMPLE_XML_PATH_LOCAL;
+	else
+    {
 		printf("Could not find '%s' nor '%s'. Aborting.\n" , SAMPLE_XML_PATH, SAMPLE_XML_PATH_LOCAL);
 		return XN_STATUS_ERROR;
 	}
@@ -82,11 +86,7 @@ int main()
 		printf("%s\n", strError);
 		return (nRetVal);
 	}
-	else if (nRetVal != XN_STATUS_OK)
-	{
-		printf("Open failed: %s\n", xnGetStatusString(nRetVal));
-		return (nRetVal);
-	}
+    CHECK_RC(nRetVal, "Open");
 
     // main variables
 	DepthGenerator depth;
@@ -127,28 +127,27 @@ int main()
         // pass this down into our variables
         frameNumber = depthMD.FrameID();
         const XnDepthPixel* depthData = depthMD.Data();
-//        const XnUInt8*      imageData = imageMD.Data();
-//        const XnGrayscale16Pixel* imageData = imageMD.Grayscale16Data();
         const XnRGB24Pixel* imageData = imageMD.RGB24Data();
 
         // process the data
-        printf("Frame %d) %dx%d @ %.1f FPS\n", frameNumber, depthMD.XRes(), depthMD.YRes(), xnFPSCalc(&xnFPS));
+        printf("Frame %d) %.1f FPS\n", frameNumber, xnFPSCalc(&xnFPS));
 
         if (frameNumber == 50 && !imageWritten)
         {
+            printf("  Writing data... ");
+            fflush(stdout);
             FILE* f;
             f = fopen("fc_640x480_d.dat", "wb");
             fwrite(depthData, sizeof(XnDepthPixel), depthMD.XRes() * depthMD.YRes(), f);
             fclose(f);
 
             f = fopen("fc_640x480_c.dat", "wb");
-//            fwrite(imageData, sizeof(XnGrayscale16Pixel), imageMD.XRes() * imageMD.YRes(), f);
             fwrite(imageData, sizeof(XnRGB24Pixel), imageMD.XRes() * imageMD.YRes(), f);
             fclose(f);
 
             imageWritten = true;
+            printf("done\n");
         }
-//		printf("Frame %d) Middle point is: %u. FPS: %f\n", depthMD.FrameID(), depthMD(depthMD.XRes() / 2, depthMD.YRes() / 2), xnFPSCalc(&xnFPS));
 	}
 
 	depth.Release();
