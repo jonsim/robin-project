@@ -132,4 +132,4 @@ image_d.save("fc_640x480_d.png")
 
 # Colour
 image_c.show()
-image_d.save("fc_640x480_c.png")
+image_c.save("fc_640x480_c.png")
