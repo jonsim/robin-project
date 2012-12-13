@@ -20,8 +20,9 @@ import struct
 
 # Print a picture
 # Variables
-image_width  = 640
-image_height = 480
+image_width   = 640
+image_height  = 480
+maximum_depth = 0
 
 
 
@@ -32,7 +33,7 @@ print "Initialising..."
 image_d = Image.new("RGB", (image_width, image_height), (0,255,0))
 draw_d  = ImageDraw.Draw(image_d)
 
-# Grayscale
+# Colour
 image_c = Image.new("RGB", (image_width, image_height), (0,255,0))
 draw_c  = ImageDraw.Draw(image_c)
 
@@ -48,14 +49,17 @@ y = 0
 with open("fc_" + str(image_width) + "x" + str(image_height) + "_d.dat", "rb") as f:
     byte = f.read(2)
     while byte:
-        v_d[x][y] = struct.unpack('H', byte)[0]
+        vd = struct.unpack('H', byte)[0]
+        v_d[x][y] = vd
+        if vd > maximum_depth:
+            maximum_depth = vd
         x += 1
         if x == 640:
             x = 0
             y += 1
         byte = f.read(2)
 
-# Grayscale data
+# Colour data
 v_c = [ [0 for i in range(image_height)] for j in range(image_width) ]
 x = 0
 y = 0
@@ -82,7 +86,7 @@ with open("fc_" + str(image_width) + "x" + str(image_height) + "_c.dat", "rb") a
 print "Drawing images..."
 
 # Depth image
-depth_scaling = 255.0 / 4000.0
+depth_scaling = 255.0 / maximum_depth
 for y in range(image_height):
     for x in range(image_width):
         gs_colour = int(v_d[x][y] * depth_scaling)
@@ -91,16 +95,29 @@ for y in range(image_height):
         else:
             rgb_colour = (gs_colour, gs_colour, gs_colour)
         draw_d.point((x,y), fill=rgb_colour)
+# Scale
+scale_offset_x = 10
+scale_offset_y = 10
+scale_height   = 200
+scale_width    = 65
+gradient_scaling = 255.0 / (scale_height-30)
+draw_d.rectangle([scale_offset_x, scale_offset_y, scale_offset_x+scale_width, scale_offset_y+scale_height], fill=(255,255,255), outline=(0,0,0))
+for y in range(scale_height-30):
+    for x in range(20):
+        gradient_shade = int(y * gradient_scaling)
+        draw_d.point((scale_offset_x+5+x, scale_offset_y+20+y), fill=(gradient_shade, gradient_shade, gradient_shade))
+title_string = "DEPTH (mm)"
+title_string_s = draw_d.textsize(title_string)
+title_string_offset_x = scale_width / 2 - title_string_s[0] / 2
+title_string_offset_x = 4   # Comment this out for a more accurate x offset (at the risk of slight-non-centering
+title_string_offset_y = 2
+draw_d.text((scale_offset_x+title_string_offset_x, scale_offset_y+title_string_offset_y), title_string, fill=(0,0,0))
+draw_d.text((scale_offset_x+25, scale_offset_y+15), "- 0", fill=(0,0,0))
+draw_d.text((scale_offset_x+25, scale_offset_y+scale_height-16), "- " + str(maximum_depth), fill=(0,0,0))
 
-# Grayscale image
-#grayscale_scaling = float(2**8) / 2**16
+# Colour image
 for y in range(image_height):
     for x in range(image_width):
-#        gs_colour = int(v_g[x][y] * grayscale_scaling)
-#        if gs_colour > 255:
-#            rgb_colour = (255, 0, 0)    # Display out of gamut colours in red
-#        else:
-#            rgb_colour = (gs_colour, gs_colour, gs_colour)
         rgb_colour = v_c[x][y]
         draw_c.point((x,y), fill=rgb_colour)
 
@@ -113,6 +130,6 @@ print "Displaying images..."
 image_d.show()
 image_d.save("fc_640x480_d.png")
 
-# Grayscale
+# Colour
 image_c.show()
 image_d.save("fc_640x480_c.png")
