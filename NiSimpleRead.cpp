@@ -104,8 +104,8 @@ int main()
 	CHECK_RC(nRetVal, "FPS Init");
 
     // some of my cheeky variables
-//    bool imageCaptured = false;
     int frameNumber = 0;
+    bool imageWritten = false;
 
 	// main loop
     while (!xnOSWasKeyboardHit())
@@ -128,31 +128,25 @@ int main()
         frameNumber = depthMD.FrameID();
         const XnDepthPixel* depthData = depthMD.Data();
 //        const XnUInt8*      imageData = imageMD.Data();
-        const XnGrayscale8Pixel* imageData = imageMD.Grayscale8Data();
+//        const XnGrayscale16Pixel* imageData = imageMD.Grayscale16Data();
+        const XnRGB24Pixel* imageData = imageMD.RGB24Data();
 
         // process the data
         printf("Frame %d) %dx%d @ %.1f FPS\n", frameNumber, depthMD.XRes(), depthMD.YRes(), xnFPSCalc(&xnFPS));
 
-        if (frameNumber == 50)
+        if (frameNumber == 50 && !imageWritten)
         {
             FILE* f;
-//            f = fopen("fc_640x480_d.csv","w");
             f = fopen("fc_640x480_d.dat", "wb");
-//            char fileName[64];
-//            sprintf(fileName, "fc_%dx%d_%c.dat", depthMD.XRes(), depthMD.YRes(), 'd');
-//            f = fopen(fileName,"wb");
-//            fprintf(f, "d 640 480\n");
-//            printf("sizeof(XnDepthPixel)=%d\n", sizeof(XnDepthPixel));
             fwrite(depthData, sizeof(XnDepthPixel), depthMD.XRes() * depthMD.YRes(), f);
-/*            for (XnUInt y = 0; y < depthMD.YRes(); y++)
-            {
-                for (XnUInt x = 0; x < depthMD.XRes(); x++, depthData++, imageData++)
-                {
-                    fprintf(f, "%d ", *depthData);
-                }
-                fprintf(f, "\n");
-            }*/
             fclose(f);
+
+            f = fopen("fc_640x480_c.dat", "wb");
+//            fwrite(imageData, sizeof(XnGrayscale16Pixel), imageMD.XRes() * imageMD.YRes(), f);
+            fwrite(imageData, sizeof(XnRGB24Pixel), imageMD.XRes() * imageMD.YRes(), f);
+            fclose(f);
+
+            imageWritten = true;
         }
 //		printf("Frame %d) Middle point is: %u. FPS: %f\n", depthMD.FrameID(), depthMD(depthMD.XRes() / 2, depthMD.YRes() / 2), xnFPSCalc(&xnFPS));
 	}
