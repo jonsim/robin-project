@@ -2,9 +2,12 @@
 *.slo
 *.lo
 *.o
+Release/*.o
+Release/*.d
+CaptureFrame
 
 # Compiled Dynamic libraries
-*.so
+#*.so
 *.dylib
 
 # Compiled Static libraries
