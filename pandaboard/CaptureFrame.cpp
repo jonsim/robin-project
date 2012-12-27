@@ -37,12 +37,12 @@
 //---------------------------------------------------------------------------
 // Macros
 //---------------------------------------------------------------------------
-#define CHECK_RC(rc, what)											\
-	if (rc != XN_STATUS_OK)											\
-	{																\
-		printf("%s failed: %s\n", what, xnGetStatusString(rc));		\
-		return rc;													\
-	}
+#define CHECK_RC(rc, what)                                              \
+    if (rc != XN_STATUS_OK)                                             \
+    {                                                                   \
+        printf("%s failed: %s\n", what, xnGetStatusString(rc));         \
+        return rc;                                                      \
+    }
 
 //---------------------------------------------------------------------------
 // Code
@@ -52,64 +52,64 @@ using namespace xn;
 
 XnBool fileExists(const char *fn)
 {
-	XnBool exists;
-	xnOSDoesFileExist(fn, &exists);
-	return exists;
+    XnBool exists;
+    xnOSDoesFileExist(fn, &exists);
+    return exists;
 }
 
 int main()
 {
-	XnStatus nRetVal = XN_STATUS_OK;
+    XnStatus nRetVal = XN_STATUS_OK;
 
-	Context context;
-	ScriptNode scriptNode;
-	EnumerationErrors errors;
+    Context context;
+    ScriptNode scriptNode;
+    EnumerationErrors errors;
 
     // Load config file
-	const char *fn = NULL;
-	if	(fileExists(SAMPLE_XML_PATH))
+    const char *fn = NULL;
+    if (fileExists(SAMPLE_XML_PATH))
         fn = SAMPLE_XML_PATH;
-	else if (fileExists(SAMPLE_XML_PATH_LOCAL))
+    else if (fileExists(SAMPLE_XML_PATH_LOCAL))
         fn = SAMPLE_XML_PATH_LOCAL;
-	else
+    else
     {
-		printf("Could not find '%s' nor '%s'. Aborting.\n" , SAMPLE_XML_PATH, SAMPLE_XML_PATH_LOCAL);
-		return XN_STATUS_ERROR;
-	}
-	printf("Reading config from: '%s'\n", fn);
-	nRetVal = context.InitFromXmlFile(fn, scriptNode, &errors);
+        printf("Could not find '%s' nor '%s'. Aborting.\n" , SAMPLE_XML_PATH, SAMPLE_XML_PATH_LOCAL);
+        return XN_STATUS_ERROR;
+    }
+    printf("Reading config from: '%s'\n", fn);
+    nRetVal = context.InitFromXmlFile(fn, scriptNode, &errors);
 
-	if (nRetVal == XN_STATUS_NO_NODE_PRESENT)
-	{
-		XnChar strError[1024];
-		errors.ToString(strError, 1024);
-		printf("%s\n", strError);
-		return (nRetVal);
-	}
+    if (nRetVal == XN_STATUS_NO_NODE_PRESENT)
+    {
+        XnChar strError[1024];
+        errors.ToString(strError, 1024);
+        printf("%s\n", strError);
+        return (nRetVal);
+    }
     CHECK_RC(nRetVal, "Open");
 
     // main variables
-	DepthGenerator depth;
+    DepthGenerator depth;
     ImageGenerator image;
     DepthMetaData  depthMD;
     ImageMetaData  imageMD;
     XnFPSData      xnFPS;
 
     // initialise and validate main variables
-	nRetVal = context.FindExistingNode(XN_NODE_TYPE_DEPTH, depth);
-	CHECK_RC(nRetVal, "Find depth generator");
+    nRetVal = context.FindExistingNode(XN_NODE_TYPE_DEPTH, depth);
+    CHECK_RC(nRetVal, "Find depth generator");
     nRetVal = context.FindExistingNode(XN_NODE_TYPE_IMAGE, image);
     CHECK_RC(nRetVal, "Find image generator");
-	nRetVal = xnFPSInit(&xnFPS, 180);
-	CHECK_RC(nRetVal, "FPS Init");
+    nRetVal = xnFPSInit(&xnFPS, 180);
+    CHECK_RC(nRetVal, "FPS Init");
 
     // capture the data
     nRetVal = context.WaitAndUpdateAll();
     while (nRetVal != XN_STATUS_OK)
-	{
-		printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
+    {
+        printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
         nRetVal = context.WaitAndUpdateAll();
-	}
+    }
 
     // read the new data into our containers
     depth.GetMetaData(depthMD);
@@ -130,10 +130,10 @@ int main()
     printf("done\n");
 
     // finish up
-	depth.Release();
+    depth.Release();
     image.Release();
-	scriptNode.Release();
-	context.Release();
+    scriptNode.Release();
+    context.Release();
 
-	return 0;
+    return 0;
 }

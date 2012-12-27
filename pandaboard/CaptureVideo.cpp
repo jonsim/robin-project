@@ -22,6 +22,14 @@
 //---------------------------------------------------------------------------
 // Includes
 //---------------------------------------------------------------------------
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <XnOpenNI.h>
 #include <XnLog.h>
 #include <XnCppWrapper.h>
@@ -33,16 +41,25 @@
 //---------------------------------------------------------------------------
 #define SAMPLE_XML_PATH "../../Config/SamplesConfig.xml"
 #define SAMPLE_XML_PATH_LOCAL "SamplesConfig.xml"
+#define SERVER_ADDRESS "192.168.159.15"
+#define SERVER_PORT_1 1401
+#define SERVER_PORT_2 1402
 
 //---------------------------------------------------------------------------
 // Macros
 //---------------------------------------------------------------------------
-#define CHECK_RC(rc, what)											\
-	if (rc != XN_STATUS_OK)											\
-	{																\
-		printf("%s failed: %s\n", what, xnGetStatusString(rc));		\
-		return rc;													\
-	}
+#define CHECK_RC(rc, what)                                              \
+    if (rc != XN_STATUS_OK)                                             \
+    {                                                                   \
+        printf("%s failed: %s\n", what, xnGetStatusString(rc));         \
+        return rc;                                                      \
+    }
+#define CHECK_RETURN(r, what)       \
+    if (r < 0)                      \
+    {                               \
+        perror(what);               \
+        return 1;                   \
+    }
 
 //---------------------------------------------------------------------------
 // Code
@@ -52,64 +69,113 @@ using namespace xn;
 
 XnBool fileExists(const char *fn)
 {
-	XnBool exists;
-	xnOSDoesFileExist(fn, &exists);
-	return exists;
+    XnBool exists;
+    xnOSDoesFileExist(fn, &exists);
+    return exists;
 }
 
 int main()
 {
-	XnStatus nRetVal = XN_STATUS_OK;
+    XnStatus nRetVal = XN_STATUS_OK;
 
-	Context context;
-	ScriptNode scriptNode;
-	EnumerationErrors errors;
+    Context context;
+    ScriptNode scriptNode;
+    EnumerationErrors errors;
 
     // Load config file
-	const char *fn = NULL;
-	if	(fileExists(SAMPLE_XML_PATH))
+    const char *fn = NULL;
+    if (fileExists(SAMPLE_XML_PATH))
         fn = SAMPLE_XML_PATH;
-	else if (fileExists(SAMPLE_XML_PATH_LOCAL))
+    else if (fileExists(SAMPLE_XML_PATH_LOCAL))
         fn = SAMPLE_XML_PATH_LOCAL;
-	else
+    else
     {
-		printf("Could not find '%s' nor '%s'. Aborting.\n" , SAMPLE_XML_PATH, SAMPLE_XML_PATH_LOCAL);
-		return XN_STATUS_ERROR;
-	}
-	printf("Reading config from: '%s'\n", fn);
-	nRetVal = context.InitFromXmlFile(fn, scriptNode, &errors);
+        printf("Could not find '%s' nor '%s'. Aborting.\n" , SAMPLE_XML_PATH, SAMPLE_XML_PATH_LOCAL);
+        return XN_STATUS_ERROR;
+    }
+    printf("Reading config from: '%s'\n", fn);
+    nRetVal = context.InitFromXmlFile(fn, scriptNode, &errors);
 
-	if (nRetVal == XN_STATUS_NO_NODE_PRESENT)
-	{
-		XnChar strError[1024];
-		errors.ToString(strError, 1024);
-		printf("%s\n", strError);
-		return (nRetVal);
-	}
+    if (nRetVal == XN_STATUS_NO_NODE_PRESENT)
+    {
+        XnChar strError[1024];
+        errors.ToString(strError, 1024);
+        printf("%s\n", strError);
+        return (nRetVal);
+    }
     CHECK_RC(nRetVal, "Open");
 
     // main variables
-	DepthGenerator depth;
+    DepthGenerator depth;
     ImageGenerator image;
     DepthMetaData  depthMD;
     ImageMetaData  imageMD;
     XnFPSData      xnFPS;
 
     // initialise and validate main variables
-	nRetVal = context.FindExistingNode(XN_NODE_TYPE_DEPTH, depth);
-	CHECK_RC(nRetVal, "Find depth generator");
+    nRetVal = context.FindExistingNode(XN_NODE_TYPE_DEPTH, depth);
+    CHECK_RC(nRetVal, "Find depth generator");
     nRetVal = context.FindExistingNode(XN_NODE_TYPE_IMAGE, image);
     CHECK_RC(nRetVal, "Find image generator");
-	nRetVal = xnFPSInit(&xnFPS, 180);
-	CHECK_RC(nRetVal, "FPS Init");
+    nRetVal = xnFPSInit(&xnFPS, 180);
+    CHECK_RC(nRetVal, "FPS Init");
+    
+    
+    
+    
+    
+    // Setup server
+	struct sockaddr_in server_address;
+    int client_socket;
+    //char* server_name = "192.168.159.15";
+    char buffer[128];
+    int buffer_len = 128;
+    int retVal;
+    
+    printf("Setting up the TCP client... ");
+    fflush(stdout);
+    
+    // Create a TCP socket.
+    client_socket = socket(PF_INET, SOCK_STREAM, 0);
+    CHECK_RETURN(client_socket, "socket");
+    
+    // Set up the address of the server as given by the defines.
+	// Note that both address and port number must be in network byte order.
+	memset(&server_address, 0, sizeof(server_address));
+	server_address.sin_family = AF_INET;
+	server_address.sin_port   = htons(SERVER_PORT_1);
+	retVal = inet_aton(SERVER_ADDRESS, &server_address.sin_addr);
+	CHECK_RETURN(retVal, "inet_aton");      // NB: There was originally a close(client_socket) in this if.
+    
+    printf("done.\n");
+    
+    // Connect to the server.
+    printf("Connecting to server... ");
+    fflush(stdout);
+    retVal = connect(client_socket, (struct sockaddr*) &server_address, sizeof(server_address));
+    CHECK_RETURN(retVal, "connect");
+        
+    printf("connected.\nSending %d bytes to %s:%d.\n", buffer_len, SERVER_ADDRESS, SERVER_PORT_1);
+    retVal = write(client_socket, buffer, buffer_len);
+    CHECK_RETURN(retVal, "write");
+
+    retVal = write(client_socket, buffer, buffer_len);
+    CHECK_RETURN(retVal, "write2");
+
+    close(client_socket);
+    return 0;
+    
+    
+    
+    // LOOP HERE
 
     // capture the data
     nRetVal = context.WaitAndUpdateAll();
     while (nRetVal != XN_STATUS_OK)
-	{
-		printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
+    {
+        printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
         nRetVal = context.WaitAndUpdateAll();
-	}
+    }
 
     // read the new data into our containers
     depth.GetMetaData(depthMD);
@@ -128,12 +194,16 @@ int main()
     fwrite(imageData, sizeof(XnRGB24Pixel), imageMD.XRes() * imageMD.YRes(), f);
     fclose(f);
     printf("done\n");
+    
+    // TO HERE
+    
+    
 
     // finish up
-	depth.Release();
+    depth.Release();
     image.Release();
-	scriptNode.Release();
-	context.Release();
+    scriptNode.Release();
+    context.Release();
 
-	return 0;
+    return 0;
 }

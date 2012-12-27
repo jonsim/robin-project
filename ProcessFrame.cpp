@@ -52,8 +52,8 @@ int main (void)
     cvShowImage("Color Image", imgColor);
     cvNamedWindow("Depth Image", CV_WINDOW_AUTOSIZE);
     cvShowImage("Depth Image", imgDepth);
-	//cvSaveImage("SegmentedImage.png", segImage);
-	//cvSaveImage("DifferenceImage.png", diffImage);
+    //cvSaveImage("SegmentedImage.png", segImage);
+    //cvSaveImage("DifferenceImage.png", diffImage);
 
     // Wait until key pressed
     cvWaitKey();
