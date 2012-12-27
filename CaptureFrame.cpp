@@ -103,55 +103,33 @@ int main()
 	nRetVal = xnFPSInit(&xnFPS, 180);
 	CHECK_RC(nRetVal, "FPS Init");
 
-    // some of my cheeky variables
-//    int frameNumber = 0;
-//    bool imageWritten = false;
-
-	// main loop
-//    while (!xnOSWasKeyboardHit())
-//	{
-        // update the data
-//        nRetVal = context.WaitAnyUpdateAll();
-//		nRetVal = context.WaitOneUpdateAll(depth);
+    // capture the data
+    nRetVal = context.WaitAndUpdateAll();
+    while (nRetVal != XN_STATUS_OK)
+	{
+		printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
         nRetVal = context.WaitAndUpdateAll();
+	}
 
-        while (nRetVal != XN_STATUS_OK)
-		{
-			printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
-            nRetVal = context.WaitAndUpdateAll();
-		}
+    // read the new data into our containers
+    depth.GetMetaData(depthMD);
+    image.GetMetaData(imageMD);
+    const XnDepthPixel* depthData = depthMD.Data();
+    const XnRGB24Pixel* imageData = imageMD.RGB24Data();
 
-        // read the new data into our containers
-//		xnFPSMarkFrame(&xnFPS);
-		depth.GetMetaData(depthMD);
-        image.GetMetaData(imageMD);
+    // process (save) the data
+    printf("Writing data... ");
+    fflush(stdout);
+    FILE* f;
+    f = fopen("fc_640x480_d.dat", "wb");
+    fwrite(depthData, sizeof(XnDepthPixel), depthMD.XRes() * depthMD.YRes(), f);
+    fclose(f);
+    f = fopen("fc_640x480_c.dat", "wb");
+    fwrite(imageData, sizeof(XnRGB24Pixel), imageMD.XRes() * imageMD.YRes(), f);
+    fclose(f);
+    printf("done\n");
 
-        // pass this down into our variables
-//        frameNumber = depthMD.FrameID();
-        const XnDepthPixel* depthData = depthMD.Data();
-        const XnRGB24Pixel* imageData = imageMD.RGB24Data();
-
-        // process the data
-//        printf("Frame %d) %.1f FPS\n", frameNumber, xnFPSCalc(&xnFPS));
-
-//        if (frameNumber == 50 && !imageWritten)
-//        {
-            printf("  Writing data... ");
-            fflush(stdout);
-            FILE* f;
-            f = fopen("fc_640x480_d.dat", "wb");
-            fwrite(depthData, sizeof(XnDepthPixel), depthMD.XRes() * depthMD.YRes(), f);
-            fclose(f);
-
-            f = fopen("fc_640x480_c.dat", "wb");
-            fwrite(imageData, sizeof(XnRGB24Pixel), imageMD.XRes() * imageMD.YRes(), f);
-            fclose(f);
-
-//            imageWritten = true;
-            printf("done\n");
-//        }
-//	}
-
+    // finish up
 	depth.Release();
     image.Release();
 	scriptNode.Release();
