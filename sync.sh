@@ -9,4 +9,3 @@ echo "Syncing with jpanda (pulling changes)."
 #rsync -vlptgu -e "ssh" jpanda:~/kinect/OpenNI/Platform/Linux/Redist/OpenNI-Bin-Dev-Linux-Arm-v1.5.4.0/Samples/NiSimpleRead/* .
 rsync -vrlptgu -e "ssh" jpanda:~/kinect/project/* pandaboard/
 mv pandaboard/*.dat .
-

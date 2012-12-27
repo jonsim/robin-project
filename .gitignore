@@ -16,6 +16,8 @@
 pandaboard/Release/*.o
 pandaboard/Release/*.d
 pandaboard/CaptureFrame
-KinectImager
+pandaboard/CaptureVideo
+ProcessFrame
+ProcessVideo
 *.dat
 *.png
