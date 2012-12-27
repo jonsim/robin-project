@@ -34,10 +34,10 @@ int main (void)
     
     // Read the files into the images
     FILE* f;
-    f = fopen("../fc_640x480_d.dat", "rb");
+    f = fopen("fc_640x480_d.dat", "rb");
     fread(imgDepth->imageData, 2, IMAGE_WIDTH*IMAGE_HEIGHT, f);
     fclose(f);
-    f = fopen("../fc_640x480_c.dat", "rb");
+    f = fopen("fc_640x480_c.dat", "rb");
     fread(imgColor->imageData, 1, IMAGE_WIDTH*IMAGE_HEIGHT*3, f);
     cvCvtColor(imgColor, imgColor, CV_RGB2BGR);     // convert from OpenNIs RGB to OpenCVs BGR
     fclose(f);

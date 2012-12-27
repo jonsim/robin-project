@@ -2,9 +2,6 @@
 *.slo
 *.lo
 *.o
-Release/*.o
-Release/*.d
-CaptureFrame
 
 # Compiled Dynamic libraries
 #*.so
@@ -16,5 +13,9 @@ CaptureFrame
 *.a
 
 # Project specific files
+pandaboard/Release/*.o
+pandaboard/Release/*.d
+pandaboard/CaptureFrame
+KinectImager
 *.dat
 *.png
