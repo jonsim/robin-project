@@ -42,14 +42,23 @@ void setPixel (IplImage* img, int x, int y, unsigned char v)
 
 int main (void)
 {
+    // Create the images
+    printf("Creating the images... ");
+    fflush(stdout);
+    IplImage* imgDepth = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    IplImage* imgColor = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_8U, 3);
+    printf("done.\n");
+    
+
     // Create the server
     struct    sockaddr_in server_address;
     struct    sockaddr_in client_address;
     socklen_t client_address_length = sizeof(client_address);
     int server_socket, client_socket;
     int bytes_read;
+    int total_bytes_read;
     int retVal;
-    char buffer [128];
+    char buffer [320000];
 
     printf("Setting up the TCP server... ");
     fflush(stdout);
@@ -78,55 +87,49 @@ int main (void)
     printf("TCP connection from %s:%d\n", inet_ntoa(client_address.sin_addr), htons(client_address.sin_port));
     
     // Transfer data with the client.
+    total_bytes_read = 0;
     while (1)
     {
         while ((bytes_read = read(client_socket, buffer, sizeof(buffer))) > 0)
         {
-            printf ("Received %d bytes.\n", bytes_read);
+            total_bytes_read += bytes_read;
+            printf ("Received %d bytes (%d/320000).\n", bytes_read, total_bytes_read);
+            if (total_bytes_read == 320000)
+            {
+                total_bytes_read = 0;
+            }
         }
         CHECK_RETURN(bytes_read, "read");
+        
+        // DO SHIT HERE
+        
+        /*// Read the files into the images
+        FILE* f;
+        f = fopen("fc_640x480_d.dat", "rb");
+        fread(imgDepth->imageData, 2, IMAGE_WIDTH*IMAGE_HEIGHT, f);
+        fclose(f);
+        f = fopen("fc_640x480_c.dat", "rb");
+        fread(imgColor->imageData, 1, IMAGE_WIDTH*IMAGE_HEIGHT*3, f);
+        cvCvtColor(imgColor, imgColor, CV_RGB2BGR);     // convert from OpenNIs RGB to OpenCVs BGR
+        fclose(f);
+        *//*
+        // Process
+        cvScale(imgDepth, imgDepth, 12); // adjust contrast to brighten depth image
+        //cvDilate(imgColor, imgColor, 0, 4);
+        //cvDilate(imgDepth, imgDepth, 0, 4);
+        
+        // Display the images
+        cvNamedWindow("Color Image", CV_WINDOW_AUTOSIZE);
+        cvShowImage("Color Image", imgColor);
+        cvNamedWindow("Depth Image", CV_WINDOW_AUTOSIZE);
+        cvShowImage("Depth Image", imgDepth);
+        //cvSaveImage("SegmentedImage.png", segImage);
+        //cvSaveImage("DifferenceImage.png", diffImage);*/
     }
     
-    // Finish up.
+    // Finish up. Currently this section can never be reached.
     close(client_socket);
     close(server_socket);
-    
-    return 0 ;
-    
-    
-    
-    
-    
-
-    // Create the images
-    IplImage* imgDepth = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
-    IplImage* imgColor = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_8U, 3);
-    
-    
-    
-    /*
-    // Read the files into the images
-    FILE* f;
-    f = fopen("fc_640x480_d.dat", "rb");
-    fread(imgDepth->imageData, 2, IMAGE_WIDTH*IMAGE_HEIGHT, f);
-    fclose(f);
-    f = fopen("fc_640x480_c.dat", "rb");
-    fread(imgColor->imageData, 1, IMAGE_WIDTH*IMAGE_HEIGHT*3, f);
-    cvCvtColor(imgColor, imgColor, CV_RGB2BGR);     // convert from OpenNIs RGB to OpenCVs BGR
-    fclose(f);
-    */
-    // Process
-    cvScale(imgDepth, imgDepth, 12); // adjust contrast to brighten depth image
-    //cvDilate(imgColor, imgColor, 0, 4);
-    //cvDilate(imgDepth, imgDepth, 0, 4);
-    
-    // Display the images
-    cvNamedWindow("Color Image", CV_WINDOW_AUTOSIZE);
-    cvShowImage("Color Image", imgColor);
-    cvNamedWindow("Depth Image", CV_WINDOW_AUTOSIZE);
-    cvShowImage("Depth Image", imgDepth);
-    //cvSaveImage("SegmentedImage.png", segImage);
-    //cvSaveImage("DifferenceImage.png", diffImage);
 
     // Wait until key pressed
     cvWaitKey();

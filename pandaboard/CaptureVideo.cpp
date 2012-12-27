@@ -83,6 +83,8 @@ int main()
     EnumerationErrors errors;
 
     // Load config file
+    printf("Reading config file... ");
+    fflush(stdout);
     const char *fn = NULL;
     if (fileExists(SAMPLE_XML_PATH))
         fn = SAMPLE_XML_PATH;
@@ -93,7 +95,6 @@ int main()
         printf("Could not find '%s' nor '%s'. Aborting.\n" , SAMPLE_XML_PATH, SAMPLE_XML_PATH_LOCAL);
         return XN_STATUS_ERROR;
     }
-    printf("Reading config from: '%s'\n", fn);
     nRetVal = context.InitFromXmlFile(fn, scriptNode, &errors);
 
     if (nRetVal == XN_STATUS_NO_NODE_PRESENT)
@@ -105,6 +106,8 @@ int main()
     }
     CHECK_RC(nRetVal, "Open");
 
+    printf("done.\n");
+
     // main variables
     DepthGenerator depth;
     ImageGenerator image;
@@ -113,13 +116,15 @@ int main()
     XnFPSData      xnFPS;
 
     // initialise and validate main variables
+    printf("Initialising camera components... ");
+    fflush(stdout);
     nRetVal = context.FindExistingNode(XN_NODE_TYPE_DEPTH, depth);
     CHECK_RC(nRetVal, "Find depth generator");
     nRetVal = context.FindExistingNode(XN_NODE_TYPE_IMAGE, image);
     CHECK_RC(nRetVal, "Find image generator");
     nRetVal = xnFPSInit(&xnFPS, 180);
     CHECK_RC(nRetVal, "FPS Init");
-    
+    printf("done.\n");
     
     
     
@@ -128,8 +133,8 @@ int main()
 	struct sockaddr_in server_address;
     int client_socket;
     //char* server_name = "192.168.159.15";
-    char buffer[128];
-    int buffer_len = 128;
+    char buffer[320000];
+    int buffer_len = 320000;
     int retVal;
     
     printf("Setting up the TCP client... ");
@@ -155,20 +160,45 @@ int main()
     retVal = connect(client_socket, (struct sockaddr*) &server_address, sizeof(server_address));
     CHECK_RETURN(retVal, "connect");
         
-    printf("connected.\nSending %d bytes to %s:%d.\n", buffer_len, SERVER_ADDRESS, SERVER_PORT_1);
-    retVal = write(client_socket, buffer, buffer_len);
-    CHECK_RETURN(retVal, "write");
+    printf("connected to %s:%d.\nInitiating data stream...\n", SERVER_ADDRESS, SERVER_PORT_1);
+//    retVal = write(client_socket, buffer, buffer_len);
+//    CHECK_RETURN(retVal, "write");
 
-    retVal = write(client_socket, buffer, buffer_len);
-    CHECK_RETURN(retVal, "write2");
+//    retVal = write(client_socket, buffer, buffer_len);
+//    CHECK_RETURN(retVal, "write2");
 
-    close(client_socket);
-    return 0;
+//    close(client_socket);
+//    return 0;
     
     
     
     // LOOP HERE
+    const int depth_buffer_len = sizeof(XnDepthPixel) * 640 * 480;
+    const int image_buffer_len = sizeof(XnRGB24Pixel) * 640 * 480;
+    while (!xnOSWasKeyboardHit())
+    {
+        // Update the data.
+//        nRetVal = context.WaitAndUpdateAll();
+        nRetVal = context.WaitOneUpdateAll(depth);
+        if (nRetVal != XN_STATUS_OK)
+        {
+            printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
+            continue;
+        }
 
+        // Read the data into our containers.
+        depth.GetMetaData(depthMD);
+//        image.GetMetaData(imageMD);
+        const XnDepthPixel* depthData = depthMD.Data();
+//        const XnRGB24Pixel* imageData = imageMD.RGB24Data();
+
+        // Send the data.
+        retVal = write(client_socket, depthData, depth_buffer_len);
+        CHECK_RETURN(retVal, "write_depth");
+    }
+    close(client_socket);
+
+   /* 
     // capture the data
     nRetVal = context.WaitAndUpdateAll();
     while (nRetVal != XN_STATUS_OK)
@@ -194,7 +224,7 @@ int main()
     fwrite(imageData, sizeof(XnRGB24Pixel), imageMD.XRes() * imageMD.YRes(), f);
     fclose(f);
     printf("done\n");
-    
+    */
     // TO HERE
     
     
