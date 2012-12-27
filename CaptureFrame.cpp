@@ -104,36 +104,38 @@ int main()
 	CHECK_RC(nRetVal, "FPS Init");
 
     // some of my cheeky variables
-    int frameNumber = 0;
-    bool imageWritten = false;
+//    int frameNumber = 0;
+//    bool imageWritten = false;
 
 	// main loop
-    while (!xnOSWasKeyboardHit())
-	{
+//    while (!xnOSWasKeyboardHit())
+//	{
         // update the data
 //        nRetVal = context.WaitAnyUpdateAll();
-		nRetVal = context.WaitOneUpdateAll(depth);
-		if (nRetVal != XN_STATUS_OK)
+//		nRetVal = context.WaitOneUpdateAll(depth);
+        nRetVal = context.WaitAndUpdateAll();
+
+        while (nRetVal != XN_STATUS_OK)
 		{
 			printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
-			continue;
+            nRetVal = context.WaitAndUpdateAll();
 		}
 
         // read the new data into our containers
-		xnFPSMarkFrame(&xnFPS);
+//		xnFPSMarkFrame(&xnFPS);
 		depth.GetMetaData(depthMD);
         image.GetMetaData(imageMD);
 
         // pass this down into our variables
-        frameNumber = depthMD.FrameID();
+//        frameNumber = depthMD.FrameID();
         const XnDepthPixel* depthData = depthMD.Data();
         const XnRGB24Pixel* imageData = imageMD.RGB24Data();
 
         // process the data
-        printf("Frame %d) %.1f FPS\n", frameNumber, xnFPSCalc(&xnFPS));
+//        printf("Frame %d) %.1f FPS\n", frameNumber, xnFPSCalc(&xnFPS));
 
-        if (frameNumber == 50 && !imageWritten)
-        {
+//        if (frameNumber == 50 && !imageWritten)
+//        {
             printf("  Writing data... ");
             fflush(stdout);
             FILE* f;
@@ -145,10 +147,10 @@ int main()
             fwrite(imageData, sizeof(XnRGB24Pixel), imageMD.XRes() * imageMD.YRes(), f);
             fclose(f);
 
-            imageWritten = true;
+//            imageWritten = true;
             printf("done\n");
-        }
-	}
+//        }
+//	}
 
 	depth.Release();
     image.Release();
