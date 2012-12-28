@@ -47,6 +47,7 @@ int main (void)
     fflush(stdout);
     IplImage* imgDepth = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
     IplImage* imgColor = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_8U, 3);
+    cvNamedWindow("DepthVideo", CV_WINDOW_AUTOSIZE);
     printf("done.\n");
     
 
@@ -58,7 +59,6 @@ int main (void)
     int bytes_read;
     int total_bytes_read;
     int retVal;
-    char buffer [320000];
 
     printf("Setting up the TCP server... ");
     fflush(stdout);
@@ -88,15 +88,25 @@ int main (void)
     
     // Transfer data with the client.
     total_bytes_read = 0;
+    const int depth_buffer_len = 2 * IMAGE_WIDTH * IMAGE_HEIGHT;
+    const int color_buffer_len = 3 * IMAGE_WIDTH * IMAGE_HEIGHT;
+    int buttonPress;
     while (1)
     {
-        while ((bytes_read = read(client_socket, buffer, sizeof(buffer))) > 0)
+        //while ((bytes_read = read(client_socket, buffer, sizeof(buffer))) > 0)
+        while ((bytes_read = read(client_socket, (imgDepth->imageData + total_bytes_read), (depth_buffer_len - total_bytes_read))) > 0)
         {
             total_bytes_read += bytes_read;
-            printf ("Received %d bytes (%d/320000).\n", bytes_read, total_bytes_read);
-            if (total_bytes_read == 320000)
+            //printf ("Received %d bytes (%d/320000).\n", bytes_read, total_bytes_read);
+            // Check if the buffer is full
+            if (total_bytes_read >= depth_buffer_len)
             {
                 total_bytes_read = 0;
+                cvScale(imgDepth, imgDepth, 12);
+                cvShowImage("DepthVideo", imgDepth);
+                buttonPress = cvWaitKey(5);
+                if (buttonPress >= 0)
+                    goto loop_exit;
             }
         }
         CHECK_RETURN(bytes_read, "read");
@@ -125,14 +135,15 @@ int main (void)
         cvShowImage("Depth Image", imgDepth);
         //cvSaveImage("SegmentedImage.png", segImage);
         //cvSaveImage("DifferenceImage.png", diffImage);*/
-    }
+    } loop_exit:
     
+    printf("exitting.\n");
     // Finish up. Currently this section can never be reached.
     close(client_socket);
     close(server_socket);
 
     // Wait until key pressed
-    cvWaitKey();
+    //cvWaitKey();
 
     // Release memory and cleanup
     cvDestroyAllWindows();
