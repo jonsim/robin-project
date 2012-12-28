@@ -15,15 +15,15 @@
 // Defines
 #define IMAGE_WIDTH  640
 #define IMAGE_HEIGHT 480
-#define SERVER_PORT_1 1401  // Port to listen for streaming depth  data on.
-#define SERVER_PORT_2 1402  // Port to listen for streaming colour data on.
+#define SERVER_PORT_D 1401  // Port to listen for streaming depth  data on.
+#define SERVER_PORT_C 1402  // Port to listen for streaming colour data on.
 
 // Macros
 #define CHECK_RETURN(r, what)       \
     if (r < 0)                      \
     {                               \
         perror(what);               \
-        return 1;                   \
+        exit(EXIT_FAILURE);         \
     }
 
 
@@ -40,6 +40,36 @@ void setPixel (IplImage* img, int x, int y, unsigned char v)
     ((unsigned char*) (img->imageData + img->widthStep*y))[x * img->nChannels] = v;
 }
 
+void setupTCPServer (int* serverSocket, struct sockaddr_in* serverAddress, int serverPort, int* clientSocket, struct sockaddr_in* clientAddress)
+{
+    int retVal;
+    // Create an IP streaming socket (which uses TCP).
+    (*serverSocket) = socket(PF_INET, SOCK_STREAM, 0);
+    CHECK_RETURN((*serverSocket), "socket");
+
+    // Bind to port.
+    memset(serverAddress, 0, sizeof((*serverAddress)));
+    serverAddress->sin_family = AF_INET;
+    serverAddress->sin_port   = htons(serverPort);     // host to network short: converts a u_short from host to TCP network byte order (big-endian).
+    retVal = bind((*serverSocket), (struct sockaddr*) serverAddress, sizeof((*serverAddress)));
+    CHECK_RETURN(retVal, "bind");
+
+    // Set to listen on the port with a connection queue length of 1.
+    retVal = listen((*serverSocket), 1);
+    CHECK_RETURN(retVal, "listen");
+    
+//    return 0;
+}
+
+void waitForClientConnection (int* serverSocket, int* clientSocket, struct sockaddr_in* clientAddress, socklen_t* clientAddressLength)
+{
+    (*clientSocket) = accept((*serverSocket), (struct sockaddr*) clientAddress, clientAddressLength);
+    CHECK_RETURN((*clientSocket), "accept");
+    printf("TCP connection from %s:%d\n", inet_ntoa(clientAddress->sin_addr), htons(clientAddress->sin_port));
+    
+//    return 0;
+}
+
 int main (void)
 {
     // Create the images
@@ -52,39 +82,24 @@ int main (void)
     
 
     // Create the server
-    struct    sockaddr_in server_address;
-    struct    sockaddr_in client_address;
-    socklen_t client_address_length = sizeof(client_address);
-    int server_socket, client_socket;
+    struct    sockaddr_in serverAddressD;
+    struct    sockaddr_in serverAddressC;
+    struct    sockaddr_in clientAddressD;
+    struct    sockaddr_in clientAddressC;
+    socklen_t clientAddressLength = sizeof(clientAddressD);
+    int serverSocketD, serverSocketC, clientSocketD, clientSocketC;
     int bytes_read;
     int total_bytes_read;
     int retVal;
 
     printf("Setting up the TCP server... ");
     fflush(stdout);
-
-    // Create an IP streaming socket (which uses TCP).
-    server_socket = socket(PF_INET, SOCK_STREAM, 0);
-    CHECK_RETURN(server_socket, "socket");
-
-    // Bind to port.
-    memset(&server_address, 0, sizeof(server_address));
-    server_address.sin_family = AF_INET;
-    server_address.sin_port   = htons(SERVER_PORT_1);     // host to network short: converts a u_short from host to TCP network byte order (big-endian).
-    retVal = bind(server_socket, (struct sockaddr*) &server_address, sizeof(server_address));
-    CHECK_RETURN(retVal, "bind");
-
-    // Set to listen on the port with a connection queue length of 1.
-    retVal = listen(server_socket, 1);
-    CHECK_RETURN(retVal, "listen");
-    
+    setupTCPServer(&serverSocketD, &serverAddressD, SERVER_PORT_D, &clientSocketD, &clientAddressD);
     printf("done.\n");
     
     // Wait until a client connects to us.
-    printf("Waiting for TCP connection on port %d.\n", SERVER_PORT_1);
-    client_socket = accept(server_socket, (struct sockaddr*) &client_address, &client_address_length);
-    CHECK_RETURN(client_socket, "accept");
-    printf("TCP connection from %s:%d\n", inet_ntoa(client_address.sin_addr), htons(client_address.sin_port));
+    printf("Waiting for TCP connection on port %d.\n", SERVER_PORT_D);
+    waitForClientConnection(&serverSocketD, &clientSocketD, &clientAddressD, &clientAddressLength);
     
     // Transfer data with the client.
     total_bytes_read = 0;
@@ -94,7 +109,7 @@ int main (void)
     while (1)
     {
         //while ((bytes_read = read(client_socket, buffer, sizeof(buffer))) > 0)
-        while ((bytes_read = read(client_socket, (imgDepth->imageData + total_bytes_read), (depth_buffer_len - total_bytes_read))) > 0)
+        while ((bytes_read = read(clientSocketD, (imgDepth->imageData + total_bytes_read), (depth_buffer_len - total_bytes_read))) > 0)
         {
             total_bytes_read += bytes_read;
             //printf ("Received %d bytes (%d/320000).\n", bytes_read, total_bytes_read);
@@ -139,8 +154,10 @@ int main (void)
     
     printf("exitting.\n");
     // Finish up. Currently this section can never be reached.
-    close(client_socket);
-    close(server_socket);
+    close(clientSocketD);
+    close(serverSocketD);
+    //close(clientSocketC);
+    //close(serverSocketC);
 
     // Wait until key pressed
     //cvWaitKey();
