@@ -35,15 +35,18 @@
 #include <XnCppWrapper.h>
 #include <XnFPSCalculator.h>
 #include <stdio.h>
+#include <errno.h>
 
 //---------------------------------------------------------------------------
 // Defines
 //---------------------------------------------------------------------------
 #define SAMPLE_XML_PATH "../../Config/SamplesConfig.xml"
-#define SAMPLE_XML_PATH_LOCAL "SamplesConfig.xml"
+#define SAMPLE_XML_PATH_LOCAL "/home/jon/kinect/project/SamplesConfig.xml"
 #define SERVER_ADDRESS "192.168.159.15"
-#define SERVER_PORT_1 1401
-#define SERVER_PORT_2 1402
+#define SERVER_PORT_D 1401
+#define SERVER_PORT_C 1402
+#define DEPTH_STREAM
+//#define COLOR_STREAM
 
 //---------------------------------------------------------------------------
 // Macros
@@ -58,7 +61,7 @@
     if (r < 0)                      \
     {                               \
         perror(what);               \
-        return 1;                   \
+        exit(EXIT_FAILURE);         \
     }
 
 //---------------------------------------------------------------------------
@@ -72,6 +75,41 @@ XnBool fileExists(const char *fn)
     XnBool exists;
     xnOSDoesFileExist(fn, &exists);
     return exists;
+}
+
+void setupTCPClient (int* clientSocket, struct sockaddr_in* serverAddress, int serverPort)
+{
+    int retVal;
+    
+    // Create a TCP socket.
+    (*clientSocket) = socket(PF_INET, SOCK_STREAM, 0);
+    CHECK_RETURN((*clientSocket), "socket");
+    
+    // Set up the address of the server as given by the defines.
+	// Note that both address and port number must be in network byte order.
+	memset(serverAddress, 0, sizeof((*serverAddress)));
+	serverAddress->sin_family = AF_INET;
+	serverAddress->sin_port   = htons(serverPort);
+	retVal = inet_aton(SERVER_ADDRESS, &(serverAddress->sin_addr));
+	CHECK_RETURN(retVal, "inet_aton");      // NB: There was originally a close(client_socket) in this if.
+}
+
+void connectToServer (int* clientSocket, struct sockaddr_in* serverAddress, int serverPort, ScriptNode* scriptNode, Context* context)
+{
+    int retVal;
+    
+    retVal = connect((*clientSocket), (struct sockaddr*) serverAddress, sizeof((*serverAddress)));
+    if (retVal < 0)
+    {
+        printf("Failed to connect to %s:%d, exitting.\n", SERVER_ADDRESS, serverPort);
+        scriptNode->Release();
+        context->Release();
+        exit(EXIT_FAILURE);
+    }
+    else
+    {
+        printf("Connected to %s:%d.\n", SERVER_ADDRESS, serverPort);
+    }
 }
 
 int main()
@@ -108,78 +146,63 @@ int main()
 
     printf("done.\n");
 
+
     // main variables
     DepthGenerator depth;
-    ImageGenerator image;
+    ImageGenerator color;
     DepthMetaData  depthMD;
-    ImageMetaData  imageMD;
+    ImageMetaData  colorMD;
     XnFPSData      xnFPS;
+
 
     // initialise and validate main variables
     printf("Initialising camera components... ");
     fflush(stdout);
     nRetVal = context.FindExistingNode(XN_NODE_TYPE_DEPTH, depth);
     CHECK_RC(nRetVal, "Find depth generator");
-    nRetVal = context.FindExistingNode(XN_NODE_TYPE_IMAGE, image);
+    nRetVal = context.FindExistingNode(XN_NODE_TYPE_IMAGE, color);
     CHECK_RC(nRetVal, "Find image generator");
     nRetVal = xnFPSInit(&xnFPS, 180);
     CHECK_RC(nRetVal, "FPS Init");
     printf("done.\n");
     
     
-    
-    
     // Setup server
-	struct sockaddr_in server_address;
-    int client_socket;
-    //char* server_name = "192.168.159.15";
-    char buffer[320000];
-    int buffer_len = 320000;
+#ifdef DEPTH_STREAM
+	struct sockaddr_in serverAddressD;
+    int clientSocketD;
+#endif
+#ifdef COLOR_STREAM
+	struct sockaddr_in serverAddressC;
+    int clientSocketC;
+#endif
     int retVal;
     
     printf("Setting up the TCP client... ");
     fflush(stdout);
-    
-    // Create a TCP socket.
-    client_socket = socket(PF_INET, SOCK_STREAM, 0);
-    CHECK_RETURN(client_socket, "socket");
-    
-    // Set up the address of the server as given by the defines.
-	// Note that both address and port number must be in network byte order.
-	memset(&server_address, 0, sizeof(server_address));
-	server_address.sin_family = AF_INET;
-	server_address.sin_port   = htons(SERVER_PORT_1);
-	retVal = inet_aton(SERVER_ADDRESS, &server_address.sin_addr);
-	CHECK_RETURN(retVal, "inet_aton");      // NB: There was originally a close(client_socket) in this if.
-    
+#ifdef DEPTH_STREAM
+    setupTCPClient(&clientSocketD, &serverAddressD, SERVER_PORT_D);
+#endif
+#ifdef COLOR_STREAM
+    setupTCPClient(&clientSocketC, &serverAddressC, SERVER_PORT_C);
+#endif
     printf("done.\n");
     
     // Connect to the server.
-    printf("Connecting to server... ");
-    fflush(stdout);
-    retVal = connect(client_socket, (struct sockaddr*) &server_address, sizeof(server_address));
-    CHECK_RETURN(retVal, "connect");
-        
-    printf("connected to %s:%d.\nInitiating data stream...\n", SERVER_ADDRESS, SERVER_PORT_1);
-//    retVal = write(client_socket, buffer, buffer_len);
-//    CHECK_RETURN(retVal, "write");
+    printf("Connecting to server...\n");
+#ifdef DEPTH_STREAM
+    connectToServer(&clientSocketD, &serverAddressD, SERVER_PORT_D, &scriptNode, &context);
+    const int depthBufferLen = sizeof(XnDepthPixel) * 640 * 480;
+#endif
+#ifdef COLOR_STREAM
+    connectToServer(&clientSocketC, &serverAddressC, SERVER_PORT_C, &scriptNode, &context);
+    const int colorBufferLen = sizeof(XnRGB24Pixel) * 640 * 480;
+#endif
 
-//    retVal = write(client_socket, buffer, buffer_len);
-//    CHECK_RETURN(retVal, "write2");
-
-//    close(client_socket);
-//    return 0;
-    
-    
-    
-    // LOOP HERE
-    const int depth_buffer_len = sizeof(XnDepthPixel) * 640 * 480;
-    const int image_buffer_len = sizeof(XnRGB24Pixel) * 640 * 480;
     while (!xnOSWasKeyboardHit())
     {
         // Update the data.
-//        nRetVal = context.WaitAndUpdateAll();
-        nRetVal = context.WaitOneUpdateAll(depth);
+        nRetVal = context.WaitAndUpdateAll();
         if (nRetVal != XN_STATUS_OK)
         {
             printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
@@ -187,51 +210,32 @@ int main()
         }
 
         // Read the data into our containers.
+#ifdef DEPTH_STREAM
         depth.GetMetaData(depthMD);
-//        image.GetMetaData(imageMD);
         const XnDepthPixel* depthData = depthMD.Data();
-//        const XnRGB24Pixel* imageData = imageMD.RGB24Data();
-
-        // Send the data.
-        retVal = write(client_socket, depthData, depth_buffer_len);
-        CHECK_RETURN(retVal, "write_depth");
-    }
-    close(client_socket);
-
-   /* 
-    // capture the data
-    nRetVal = context.WaitAndUpdateAll();
-    while (nRetVal != XN_STATUS_OK)
-    {
-        printf("UpdateData failed: %s\n", xnGetStatusString(nRetVal));
-        nRetVal = context.WaitAndUpdateAll();
+        retVal = write(clientSocketD, depthData, depthBufferLen);
+        if (retVal < 0)
+            break;
+#endif
+#ifdef COLOR_STREAM
+        color.GetMetaData(colorMD);
+        const XnRGB24Pixel* colorData = colorMD.RGB24Data();
+        retVal = write(clientSocketC, colorData, colorBufferLen);
+        if (retVal < 0)
+            break;
+#endif
     }
 
-    // read the new data into our containers
-    depth.GetMetaData(depthMD);
-    image.GetMetaData(imageMD);
-    const XnDepthPixel* depthData = depthMD.Data();
-    const XnRGB24Pixel* imageData = imageMD.RGB24Data();
-
-    // process (save) the data
-    printf("Writing data... ");
-    fflush(stdout);
-    FILE* f;
-    f = fopen("fc_640x480_d.dat", "wb");
-    fwrite(depthData, sizeof(XnDepthPixel), depthMD.XRes() * depthMD.YRes(), f);
-    fclose(f);
-    f = fopen("fc_640x480_c.dat", "wb");
-    fwrite(imageData, sizeof(XnRGB24Pixel), imageMD.XRes() * imageMD.YRes(), f);
-    fclose(f);
-    printf("done\n");
-    */
-    // TO HERE
-    
-    
-
-    // finish up
+    // Finish up.
+    printf("Exitting.\n");
+#ifdef DEPTH_STREAM
+    close(clientSocketD);
     depth.Release();
-    image.Release();
+#endif
+#ifdef COLOR_STREAM
+    close(clientSocketC);
+    color.Release();
+#endif
     scriptNode.Release();
     context.Release();
 
