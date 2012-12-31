@@ -209,6 +209,11 @@ int main()
             continue;
         }
 
+        // FPS
+        xnFPSMarkFrame(&xnFPS);
+        printf("FPS: %.1f\r", xnFPSCalc(&xnFPS));
+        fflush(stdout);
+
         // Read the data into our containers.
 #ifdef DEPTH_STREAM
         depth.GetMetaData(depthMD);
@@ -227,7 +232,7 @@ int main()
     }
 
     // Finish up.
-    printf("Exitting.\n");
+    printf("\nExitting.\n");
 #ifdef DEPTH_STREAM
     close(clientSocketD);
     depth.Release();
