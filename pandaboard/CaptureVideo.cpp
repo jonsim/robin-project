@@ -46,7 +46,7 @@
 #define SERVER_PORT_D 1401
 #define SERVER_PORT_C 1402
 #define DEPTH_STREAM
-#define COLOR_STREAM
+//#define COLOR_STREAM
 
 //---------------------------------------------------------------------------
 // Macros

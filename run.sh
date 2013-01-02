@@ -1,4 +1,5 @@
 #!/bin/sh
 
-gnome-terminal -e ./ProcessVideo
+gnome-terminal -e "./ProcessVideo"
+echo "REMOTE CODE"
 ssh jpanda "/home/jon/kinect/project/CaptureVideo"

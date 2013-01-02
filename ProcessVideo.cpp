@@ -18,7 +18,7 @@
 #define SERVER_PORT_D 1401  // Port to listen for streaming depth  data on.
 #define SERVER_PORT_C 1402  // Port to listen for streaming colour data on.
 #define DEPTH_STREAM
-#define COLOR_STREAM
+//#define COLOR_STREAM
 
 // Macros
 #define CHECK_RETURN(r, what)       \
@@ -30,6 +30,28 @@
 
 
 /********** FUNCTIONS **********/
+//returns value between 0 and 255 of pixel at image position (x,y)
+inline uint8_t getPixel_SB (IplImage* img, const uint16_t x, const uint16_t y)
+{
+    return ((uint8_t*) (img->imageData + img->widthStep*y))[img->nChannels*x];
+}
+inline uint16_t getPixel_DB (IplImage* img, const uint16_t x, const uint16_t y)
+{
+    return ((uint16_t*) (img->imageData + img->widthStep*y))[img->nChannels*x];
+}
+
+
+//sets pixel at image position (x,y)
+inline void setPixel_SB (IplImage* img, const uint16_t x, uint16_t y, uint8_t v)
+{
+    ((uint8_t*) (img->imageData + img->widthStep*y))[x*img->nChannels] = v;
+}
+inline void setPixel_DB (IplImage* img, const uint16_t x, uint16_t y, uint16_t v)
+{
+    ((uint16_t*) (img->imageData + img->widthStep*y))[img->nChannels*x] = v;
+}
+
+
 void setupTCPServer (int* serverSocket, struct sockaddr_in* serverAddress, int serverPort, int* clientSocket, struct sockaddr_in* clientAddress)
 {
     int retVal;
@@ -63,7 +85,10 @@ int main (void)
     printf("Creating the images... ");
     fflush(stdout);
 #ifdef DEPTH_STREAM
-    IplImage* imgDepth = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    IplImage* imgDepthIn      = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    IplImage* imgDepthInHist1 = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    IplImage* imgDepthInHist2 = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    IplImage* imgDepthOut     = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
 #endif
 #ifdef COLOR_STREAM
     IplImage* imgColor = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_8U, 3);
@@ -113,12 +138,13 @@ int main (void)
     
     // Transfer data with the client.
 #ifdef DEPTH_STREAM
-    cvNamedWindow("DepthVideo", CV_WINDOW_AUTOSIZE);
+    //cvNamedWindow("DepthVideo", CV_WINDOW_AUTOSIZE);
     totalBytesReadD = 0;
     const int depthBufferLen = 2 * IMAGE_WIDTH * IMAGE_HEIGHT;
+    uint32_t frameNumber = 0;
 #endif
 #ifdef COLOR_STREAM
-    cvNamedWindow("ColorVideo", CV_WINDOW_AUTOSIZE);
+    //cvNamedWindow("ColorVideo", CV_WINDOW_AUTOSIZE);
     totalBytesReadC = 0;
     const int colorBufferLen = 3 * IMAGE_WIDTH * IMAGE_HEIGHT;
 #endif
@@ -129,16 +155,48 @@ int main (void)
     {
         // read from the depth connection
 #ifdef DEPTH_STREAM
-        while ((bytesRead = read(clientSocketD, (imgDepth->imageData + totalBytesReadD), (depthBufferLen - totalBytesReadD))) > 0)
+        while ((bytesRead = read(clientSocketD, (imgDepthIn->imageData + totalBytesReadD), (depthBufferLen - totalBytesReadD))) > 0)
         {
             totalBytesReadD += bytesRead;
             // Check if the buffer is full
             if (totalBytesReadD >= depthBufferLen)
             {
+                // house keeping
                 totalBytesReadD = 0;
-                cvScale(imgDepth, imgDepth, 12);
-                cvShowImage("DepthVideo", imgDepth);
+                frameNumber++;
+                
+                // noise removal
+                // imgDepthP1 = current, raw, imgDepthP2 = previous, raw, imgDepth = current, corrected
+                cvScale(imgDepthIn, imgDepthIn, 12);
+                memcpy(imgDepthOut->imageData, imgDepthIn->imageData, depthBufferLen);
+                if (frameNumber > 2)
+                {
+                    uint16_t vPrev1, vPrev2, vCurr, vNew;
+                    for (uint16_t y = 0; y < IMAGE_HEIGHT; y++)
+                    {
+                        for (uint16_t x = 0; x < IMAGE_WIDTH; x++)
+                        {
+                            vCurr  = getPixel_DB(imgDepthIn,      x, y);
+                            vPrev1 = getPixel_DB(imgDepthInHist1, x, y);
+                            vPrev2 = getPixel_DB(imgDepthInHist2, x, y);
+                            if (vCurr < 50 && vPrev2 > 100)
+                            {
+                                vNew = vPrev2;
+                                //vNew = vPrev + ((vCurr - vPrev) / 2);
+                                setPixel_DB(imgDepthOut, x, y, vNew);
+                            }
+                        }
+                    }
+                }
+                memcpy(imgDepthInHist2->imageData, imgDepthInHist1->imageData, depthBufferLen);
+                memcpy(imgDepthInHist1->imageData, imgDepthIn->imageData,      depthBufferLen);
+                
+                // scale + show image
+                cvShowImage("Raw Depth Video", imgDepthIn);
+                cvShowImage("Corrected Depth Video", imgDepthOut);
                 buttonPress = cvWaitKey(5);
+                
+                // check for exit conditions
                 if (buttonPress >= 0)
                     goto loop_exit;
                 break;  // give the other stream a chance to catch up.
@@ -175,7 +233,10 @@ int main (void)
 #ifdef DEPTH_STREAM
     close(clientSocketD);
     close(serverSocketD);
-    cvReleaseImage(&imgDepth);
+    cvReleaseImage(&imgDepthIn);
+    cvReleaseImage(&imgDepthInHist1);
+    cvReleaseImage(&imgDepthInHist2);
+    cvReleaseImage(&imgDepthOut);
 #endif
 #ifdef COLOR_STREAM
     close(clientSocketC);
