@@ -18,7 +18,7 @@
 #define SERVER_PORT_D 1401  // Port to listen for streaming depth  data on.
 #define SERVER_PORT_C 1402  // Port to listen for streaming colour data on.
 #define DEPTH_STREAM
-//#define COLOR_STREAM
+#define COLOR_STREAM
 
 // Macros
 #define CHECK_RETURN(r, what)       \
