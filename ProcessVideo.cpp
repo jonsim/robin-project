@@ -19,6 +19,7 @@
 #define SERVER_PORT_C 1402  // Port to listen for streaming colour data on.
 #define DEPTH_STREAM
 //#define COLOR_STREAM
+#define FILTER_SIZE 2
 
 // Macros
 #define CHECK_RETURN(r, what)       \
@@ -49,6 +50,35 @@ inline void setPixel_SB (IplImage* img, const uint16_t x, uint16_t y, uint8_t v)
 inline void setPixel_DB (IplImage* img, const uint16_t x, uint16_t y, uint16_t v)
 {
     ((uint16_t*) (img->imageData + img->widthStep*y))[img->nChannels*x] = v;
+}
+
+// Retrieves the average pixel value in a neighbourhood of a given size around the given pixel.
+uint16_t calculateNeighbourhoodAverage_DB (IplImage* img, const uint16_t centre_x, const uint16_t centre_y, const uint8_t size)
+{
+    uint16_t min_x = (centre_x < size)              ? 0            : centre_x - size;
+    uint16_t max_x = (centre_x > IMAGE_WIDTH-size)  ? IMAGE_WIDTH  : centre_x + size;
+    uint16_t min_y = (centre_y < size)              ? 0            : centre_y - size;
+    uint16_t max_y = (centre_y > IMAGE_HEIGHT-size) ? IMAGE_HEIGHT : centre_y + size;
+    uint16_t pixel_value;
+    uint32_t total = 0;
+    uint32_t pixel_count = 0;
+    
+    for (uint16_t y = min_y; y < max_y; y++)
+    {
+        for (uint16_t x = min_x; x < max_x; x++)
+        {
+            pixel_value = getPixel_DB(img, x, y);
+            if (pixel_value != 0)
+            {
+                pixel_count++;
+                total += pixel_value;
+            }
+        }
+    }
+    
+    if (pixel_count == 0)
+        return 0;
+    return (uint16_t) total / pixel_count;
 }
 
 
@@ -85,10 +115,10 @@ int main (void)
     printf("Creating the images... ");
     fflush(stdout);
 #ifdef DEPTH_STREAM
-    IplImage* imgDepthIn      = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
-    IplImage* imgDepthInHist1 = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
-    IplImage* imgDepthInHist2 = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
-    IplImage* imgDepthOut     = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    IplImage* imgDepthIn    = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    IplImage* imgDepthIn_P1 = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    IplImage* imgDepthIn_P2 = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    IplImage* imgDepthOut   = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
 #endif
 #ifdef COLOR_STREAM
     IplImage* imgColor = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_8U, 3);
@@ -166,7 +196,6 @@ int main (void)
                 frameNumber++;
                 
                 // noise removal
-                // imgDepthP1 = current, raw, imgDepthP2 = previous, raw, imgDepth = current, corrected
                 cvScale(imgDepthIn, imgDepthIn, 12);
                 memcpy(imgDepthOut->imageData, imgDepthIn->imageData, depthBufferLen);
                 if (frameNumber > 2)
@@ -176,20 +205,21 @@ int main (void)
                     {
                         for (uint16_t x = 0; x < IMAGE_WIDTH; x++)
                         {
-                            vCurr  = getPixel_DB(imgDepthIn,      x, y);
-                            vPrev1 = getPixel_DB(imgDepthInHist1, x, y);
-                            vPrev2 = getPixel_DB(imgDepthInHist2, x, y);
-                            if (vCurr < 50 && vPrev2 > 100)
+                            vCurr  = getPixel_DB(imgDepthIn,    x, y);
+                            vPrev1 = getPixel_DB(imgDepthIn_P1, x, y);
+                            //vPrev2 = getPixel_DB(imgDepthIn_P2, x, y);
+                            if (vCurr == 0)
                             {
-                                vNew = vPrev2;
+                                vNew = vPrev1;
+                                //vNew = calculateNeighbourhoodAverage_DB(imgDepthIn, x, y, FILTER_SIZE);
                                 //vNew = vPrev + ((vCurr - vPrev) / 2);
                                 setPixel_DB(imgDepthOut, x, y, vNew);
                             }
                         }
                     }
                 }
-                memcpy(imgDepthInHist2->imageData, imgDepthInHist1->imageData, depthBufferLen);
-                memcpy(imgDepthInHist1->imageData, imgDepthIn->imageData,      depthBufferLen);
+                //memcpy(imgDepthIn_P2->imageData, imgDepthIn_P1->imageData, depthBufferLen);
+                memcpy(imgDepthIn_P1->imageData, imgDepthIn->imageData,    depthBufferLen);
                 
                 // scale + show image
                 cvShowImage("Raw Depth Video", imgDepthIn);
@@ -234,8 +264,8 @@ int main (void)
     close(clientSocketD);
     close(serverSocketD);
     cvReleaseImage(&imgDepthIn);
-    cvReleaseImage(&imgDepthInHist1);
-    cvReleaseImage(&imgDepthInHist2);
+    cvReleaseImage(&imgDepthIn_P1);
+    cvReleaseImage(&imgDepthIn_P2);
     cvReleaseImage(&imgDepthOut);
 #endif
 #ifdef COLOR_STREAM
