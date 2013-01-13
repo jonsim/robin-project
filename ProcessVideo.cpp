@@ -41,15 +41,83 @@ inline uint16_t getPixel_DB (IplImage* img, const uint16_t x, const uint16_t y)
     return ((uint16_t*) (img->imageData + img->widthStep*y))[img->nChannels*x];
 }
 
-
 //sets pixel at image position (x,y)
-inline void setPixel_SB (IplImage* img, const uint16_t x, uint16_t y, uint8_t v)
+inline void setPixel_SB (IplImage* img, const uint16_t x, const uint16_t y, uint8_t v)
 {
     ((uint8_t*) (img->imageData + img->widthStep*y))[x*img->nChannels] = v;
 }
-inline void setPixel_DB (IplImage* img, const uint16_t x, uint16_t y, uint16_t v)
+inline void setPixel_DB (IplImage* img, const uint16_t x, const uint16_t y, uint16_t v)
 {
     ((uint16_t*) (img->imageData + img->widthStep*y))[img->nChannels*x] = v;
+}
+inline void setPixels_SB (IplImage* img, const uint16_t x, const uint16_t y, const uint8_t r, const uint8_t g, const uint8_t b)
+{
+    ((uint8_t*) (img->imageData + img->widthStep*y))[x*img->nChannels + 0] = b;
+    ((uint8_t*) (img->imageData + img->widthStep*y))[x*img->nChannels + 1] = g;
+    ((uint8_t*) (img->imageData + img->widthStep*y))[x*img->nChannels + 2] = r;
+}
+inline void setPixel_depthColour (IplImage* dst, IplImage* src, const uint16_t x, const uint16_t y)
+{
+    // get v and then cast it to be between 0 and 255*3=765 when v's max is assumed to be 8000
+    uint8_t r, g, b;
+    uint16_t v = getPixel_DB(src, x, y);
+    
+    if (v == 0)
+    {
+        r = 0;
+        g = 0;
+        b = 0;
+    }
+    else
+    {
+        v = v - 400;
+        v = v / (4800 / 1530);
+        // H' takes values between 0-1530
+        // H' =    0- 255  RGB=   255, 0-255, 0
+        // H' =  255- 510  RGB= 255-0,   255, 0
+        // H' =  510- 765  RGB=     0,   255, 0-255
+        // H' =  765-1020  RGB=     0, 255-0, 255
+        // H' = 1020-1275  RGB= 0-255,     0, 255
+        // H' = 1275-1530  RGB=   255,     0, 255-0
+        if (v < 255)
+        {
+            r = 255u;
+            g = (uint8_t) v;  // g increases to 255
+            b =   0u;
+        }
+        else if (v < 510)
+        {
+            r = (uint8_t) (510 - v);  // r falls to 0
+            g = 255u;
+            b =   0u;
+        }
+        else if (v < 765)
+        {
+            r =   0u;
+            g = 255u;
+            b = (uint8_t) (v - 510);  // b increases to 255
+        }
+        else if (v < 1020)
+        {
+            r =   0u;
+            g = (uint8_t) (1020 - v);  // g falls to 0
+            b = 255u;
+        }
+        else if (v < 1275)
+        {
+            r = (uint8_t) (v - 1020);  // r increases to 255
+            g =   0u;
+            b = 255u;
+        }
+        else  // v < 1530
+        {
+            r = 255u;
+            g =   0u;
+            b = (uint8_t) (1530 - v);  // b falls to 0
+        }
+    }
+    
+    setPixels_SB(dst, x, y, r, g, b);
 }
 
 // Retrieves the average pixel value in a neighbourhood of a given size around the given pixel.
@@ -119,6 +187,7 @@ int main (void)
     IplImage* imgDepthIn_P1 = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
     IplImage* imgDepthIn_P2 = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
     IplImage* imgDepthOut   = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    IplImage* imgDepthDisp  = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_8U, 3);
 #endif
 #ifdef COLOR_STREAM
     IplImage* imgColor = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_8U, 3);
@@ -144,7 +213,7 @@ int main (void)
     int totalBytesReadC;
 #endif
     int bytesRead;
-    int retVal;
+    //int retVal;
 
     printf("Setting up the TCP server... ");
     fflush(stdout);
@@ -196,9 +265,17 @@ int main (void)
                 frameNumber++;
                 
                 // noise removal
+                //cvScale(imgDepthIn, imgDepthIn, 12);
+                //memcpy(imgDepthOut->imageData, imgDepthIn->imageData, depthBufferLen);
+                for (uint16_t y = 0; y < IMAGE_HEIGHT; y++)
+                {
+                    for (uint16_t x = 0; x < IMAGE_WIDTH; x++)
+                    {
+                        setPixel_depthColour(imgDepthDisp, imgDepthIn, x, y);
+                    }
+                }
                 cvScale(imgDepthIn, imgDepthIn, 12);
-                memcpy(imgDepthOut->imageData, imgDepthIn->imageData, depthBufferLen);
-                if (frameNumber > 2)
+                /*if (frameNumber > 2)
                 {
                     uint16_t vPrev1, vPrev2, vCurr, vNew;
                     for (uint16_t y = 0; y < IMAGE_HEIGHT; y++)
@@ -217,13 +294,13 @@ int main (void)
                             }
                         }
                     }
-                }
+                }*/
                 //memcpy(imgDepthIn_P2->imageData, imgDepthIn_P1->imageData, depthBufferLen);
-                memcpy(imgDepthIn_P1->imageData, imgDepthIn->imageData,    depthBufferLen);
+                //memcpy(imgDepthIn_P1->imageData, imgDepthIn->imageData,    depthBufferLen);
                 
                 // scale + show image
                 cvShowImage("Raw Depth Video", imgDepthIn);
-                cvShowImage("Corrected Depth Video", imgDepthOut);
+                cvShowImage("Corrected Depth Video", imgDepthDisp);
                 buttonPress = cvWaitKey(5);
                 
                 // check for exit conditions
