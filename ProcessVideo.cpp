@@ -71,7 +71,7 @@ inline void setPixel_depthColour (IplImage* dst, IplImage* src, const uint16_t x
     else
     {
         v = v - 400;
-        v = v / (4800 / 1530);
+        v = (v < 4800) ? v / (4800 / 1530) : 1530;
         // H' takes values between 0-1530
         // H' =    0- 255  RGB=   255, 0-255, 0
         // H' =  255- 510  RGB= 255-0,   255, 0
