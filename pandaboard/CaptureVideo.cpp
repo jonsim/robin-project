@@ -42,7 +42,7 @@
 //---------------------------------------------------------------------------
 #define SAMPLE_XML_PATH "../../Config/SamplesConfig.xml"
 #define SAMPLE_XML_PATH_LOCAL "/home/jon/kinect/project/SamplesConfig.xml"
-#define SERVER_ADDRESS "192.168.159.15"
+#define SERVER_ADDRESS "192.168.0.4"
 #define SERVER_PORT_D 1401
 #define SERVER_PORT_C 1402
 #define DEPTH_STREAM
