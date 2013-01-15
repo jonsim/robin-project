@@ -25,17 +25,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+// networking
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+// openni
 #include <XnOpenNI.h>
 #include <XnLog.h>
 #include <XnCppWrapper.h>
 #include <XnFPSCalculator.h>
-#include <stdio.h>
-#include <errno.h>
+// opencv
+#include <cv.h>
+#include <highgui.h>
 
 //---------------------------------------------------------------------------
 // Defines
@@ -45,8 +49,13 @@
 #define SERVER_ADDRESS "192.168.0.4"
 #define SERVER_PORT_D 1401
 #define SERVER_PORT_C 1402
+#define IMAGE_WIDTH  640
+#define IMAGE_HEIGHT 480
 #define DEPTH_STREAM
 //#define COLOR_STREAM
+#if COLOR_STREAM
+    #error "NO COLOUR STREAM PLESE :(... or write it yourself"
+#endif
 
 //---------------------------------------------------------------------------
 // Macros
@@ -69,6 +78,88 @@
 //---------------------------------------------------------------------------
 
 using namespace xn;
+
+
+void createColourDepthImage (cv::Mat* dst, const XnDepthPixel* src)
+{
+    static const float scaling_factor = 4800/1530;
+    uint16_t x=0, y=0;
+    uint32_t y_offset=0, total_offset=0;
+    uint16_t v;
+    uint8_t  r, g, b;
+    uint8_t* loc;
+    
+    for (y = 0, total_offset = 0; y < IMAGE_HEIGHT; y++)
+    {
+        for (x = 0; x < IMAGE_WIDTH; x++, total_offset++)
+        {
+            v = (uint16_t) src[total_offset];
+            
+            if (v == 0)
+            {
+                r = 0;
+                g = 0;
+                b = 0;
+            }
+            else
+            {
+                v -= 400;
+                v = (v < 4800) ? v / scaling_factor : 1530;
+                // H' takes values between 0-1530
+                // H' =    0- 255  RGB=   255, 0-255, 0
+                // H' =  255- 510  RGB= 255-0,   255, 0
+                // H' =  510- 765  RGB=     0,   255, 0-255
+                // H' =  765-1020  RGB=     0, 255-0, 255
+                // H' = 1020-1275  RGB= 0-255,     0, 255
+                // H' = 1275-1530  RGB=   255,     0, 255-0
+                
+                if (v < 255)
+                {
+                    r = 255u;
+                    g = (uint8_t) v;  // g increases to 255
+                    b =   0u;
+                }
+                else if (v < 510)
+                {
+                    r = (uint8_t) (510 - v);  // r falls to 0
+                    g = 255u;
+                    b =   0u;
+                }
+                else if (v < 765)
+                {
+                    r =   0u;
+                    g = 255u;
+                    b = (uint8_t) (v - 510);  // b increases to 255
+                }
+                else if (v < 1020)
+                {
+                    r =   0u;
+                    g = (uint8_t) (1020 - v);  // g falls to 0
+                    b = 255u;
+                }
+                else if (v < 1275)
+                {
+                    r = (uint8_t) (v - 1020);  // r increases to 255
+                    g =   0u;
+                    b = 255u;
+                }
+                else  // v <= 1530
+                {
+                    r = 255u;
+                    g =   0u;
+                    b = (uint8_t) (1530 - v);  // b falls to 0
+                }
+            }
+            
+            loc = dst->data + total_offset;
+            loc[0] = b;
+            loc[1] = g;
+            loc[2] = r;
+        }
+    }
+}
+
+
 
 XnBool fileExists(const char *fn)
 {
@@ -147,12 +238,15 @@ int main()
     printf("done.\n");
 
 
-    // main variables
+    // main variables (openni)
     DepthGenerator depth;
     ImageGenerator color;
     DepthMetaData  depthMD;
     ImageMetaData  colorMD;
     XnFPSData      xnFPS;
+    // main variables (opencv)
+    cv::Mat colouredDepthImage(  IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3);
+    cv::Mat anotherDepthImage(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3);
 
 
     // initialise and validate main variables
@@ -218,6 +312,12 @@ int main()
 #ifdef DEPTH_STREAM
         depth.GetMetaData(depthMD);
         const XnDepthPixel* depthData = depthMD.Data();
+        std::vector<uint8_t> buffer;
+        
+        createColourDepthImage(&colouredDepthImage, depthData);
+        cv::imencode(".JPEG", colouredDepthImage, buffer);
+        anotherDepthImage = cv::imdecode(buffer, 1);
+        
         retVal = write(clientSocketD, depthData, depthBufferLen);
         if (retVal < 0)
             break;

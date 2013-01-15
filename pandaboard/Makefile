@@ -26,5 +26,5 @@ $(EXE1): $(SRC1)
 	g++ -o $(EXE1) $(OBJ1) $(LNKR_FLAGS)
 
 $(EXE2): $(SRC2)
-	g++ $(MAKE_FLAGS2) $(ARCH_FLAGS) $(INCL_FLAGS) -o $(OBJ2) $(SRC2)
-	g++ -o $(EXE2) $(OBJ2) $(LNKR_FLAGS)
+	g++ `pkg-config --cflags opencv` $(MAKE_FLAGS2) $(ARCH_FLAGS) $(INCL_FLAGS) -o $(OBJ2) $(SRC2) `pkg-config --libs opencv`
+	g++ -o $(EXE2) $(OBJ2) $(LNKR_FLAGS) `pkg-config --libs opencv`
