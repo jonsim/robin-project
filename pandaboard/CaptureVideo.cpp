@@ -80,20 +80,20 @@
 using namespace xn;
 
 
-void createColourDepthImage (cv::Mat* dst, const XnDepthPixel* src)
+void createColourDepthImage (cv::Mat* dst, uint16_t* src)
 {
     static const float scaling_factor = 4800/1530;
     uint16_t x=0, y=0;
-    uint32_t y_offset=0, total_offset=0;
+    uint32_t y_offset=0, one_step_offset=0, three_step_offset=0;
     uint16_t v;
     uint8_t  r, g, b;
     uint8_t* loc;
     
-    for (y = 0, total_offset = 0; y < IMAGE_HEIGHT; y++)
+    for (y=0, one_step_offset=0, three_step_offset=0; y < IMAGE_HEIGHT; y++)
     {
-        for (x = 0; x < IMAGE_WIDTH; x++, total_offset++)
+        for (x = 0; x < IMAGE_WIDTH; x++, one_step_offset++, three_step_offset+=3)
         {
-            v = (uint16_t) src[total_offset];
+            v = (uint16_t) src[one_step_offset];
             
             if (v == 0)
             {
@@ -151,7 +151,7 @@ void createColourDepthImage (cv::Mat* dst, const XnDepthPixel* src)
                 }
             }
             
-            loc = dst->data + total_offset;
+            loc = dst->data + three_step_offset;
             loc[0] = b;
             loc[1] = g;
             loc[2] = r;
@@ -292,6 +292,8 @@ int main()
     connectToServer(&clientSocketC, &serverAddressC, SERVER_PORT_C, &scriptNode, &context);
     const int colorBufferLen = sizeof(XnRGB24Pixel) * 640 * 480;
 #endif
+    const uint32_t pixelCount = 640*480;
+    uint16_t legitDepthData[pixelCount];
 
     while (!xnOSWasKeyboardHit())
     {
@@ -312,13 +314,20 @@ int main()
 #ifdef DEPTH_STREAM
         depth.GetMetaData(depthMD);
         const XnDepthPixel* depthData = depthMD.Data();
+        /*for (uint32_t i = 0; i < pixelCount; i++)
+            if (depthData[i] != 0)
+                legitDepthData[i] = depthData[i];*/
         std::vector<uint8_t> buffer;
+        uint32_t buffer_size;
         
-        createColourDepthImage(&colouredDepthImage, depthData);
+        //createColourDepthImage(&colouredDepthImage, legitDepthData);
+        createColourDepthImage(&colouredDepthImage, (uint16_t*) depthData);
         cv::imencode(".JPEG", colouredDepthImage, buffer);
-        anotherDepthImage = cv::imdecode(buffer, 1);
+        buffer_size = buffer.size();
         
-        retVal = write(clientSocketD, depthData, depthBufferLen);
+        retVal = write(clientSocketD, &buffer_size, 4);
+        retVal = write(clientSocketD, &(buffer.front()), buffer_size);
+        
         if (retVal < 0)
             break;
 #endif

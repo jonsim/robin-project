@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <errno.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -183,11 +184,11 @@ int main (void)
     printf("Creating the images... ");
     fflush(stdout);
 #ifdef DEPTH_STREAM
-    IplImage* imgDepthIn    = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
+    /*IplImage* imgDepthIn    = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
     IplImage* imgDepthIn_P1 = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
     IplImage* imgDepthIn_P2 = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
     IplImage* imgDepthOut   = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_16U, 1);
-    IplImage* imgDepthDisp  = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_8U, 3);
+    IplImage* imgDepthDisp  = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_8U, 3);*/
 #endif
 #ifdef COLOR_STREAM
     IplImage* imgColor = cvCreateImage(cvSize(IMAGE_WIDTH, IMAGE_HEIGHT), IPL_DEPTH_8U, 3);
@@ -202,7 +203,6 @@ int main (void)
     socklen_t clientAddressLengthD = sizeof(clientAddressD);
     int serverSocketD;
     int clientSocketD;
-    int totalBytesReadD;
 #endif
 #ifdef COLOR_STREAM
     struct    sockaddr_in serverAddressC;
@@ -212,7 +212,6 @@ int main (void)
     int clientSocketC;
     int totalBytesReadC;
 #endif
-    int bytesRead;
     //int retVal;
 
     printf("Setting up the TCP server... ");
@@ -236,101 +235,58 @@ int main (void)
 #endif
     
     // Transfer data with the client.
-#ifdef DEPTH_STREAM
-    //cvNamedWindow("DepthVideo", CV_WINDOW_AUTOSIZE);
-    totalBytesReadD = 0;
-    const int depthBufferLen = 2 * IMAGE_WIDTH * IMAGE_HEIGHT;
-    uint32_t frameNumber = 0;
-#endif
-#ifdef COLOR_STREAM
-    //cvNamedWindow("ColorVideo", CV_WINDOW_AUTOSIZE);
-    totalBytesReadC = 0;
-    const int colorBufferLen = 3 * IMAGE_WIDTH * IMAGE_HEIGHT;
-#endif
+    cvNamedWindow("DepthVideo", CV_WINDOW_AUTOSIZE);
     int buttonPress;
+    int bytesRead;
+    uint32_t bufferSize = 0;
+    uint32_t totalBytesRead = 0;
+    uint32_t frameNumber = 0;
+    std::vector<uint8_t> buffer;
+    cv::Mat anotherDepthImage(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3);
     
     printf("Connecting completed, receiving data.\n");
     while (1)
     {
-        // read from the depth connection
-#ifdef DEPTH_STREAM
-        while ((bytesRead = read(clientSocketD, (imgDepthIn->imageData + totalBytesReadD), (depthBufferLen - totalBytesReadD))) > 0)
+        bytesRead = read(clientSocketD, &bufferSize, 4);
+        CHECK_RETURN(bytesRead, "read_depth_size");
+        while (bufferSize == 0)
         {
-            totalBytesReadD += bytesRead;
+            bytesRead = read(clientSocketD, &bufferSize, 4);
+            CHECK_RETURN(bytesRead, "read_depth_size");
+        }
+        
+        buffer.resize(bufferSize);
+        
+        while ((bytesRead = read(clientSocketD, (&(buffer.front()) + totalBytesRead), (bufferSize - totalBytesRead))) > 0)
+        {
+            totalBytesRead += bytesRead;
             // Check if the buffer is full
-            if (totalBytesReadD >= depthBufferLen)
+            if (totalBytesRead >= bufferSize)
             {
                 // house keeping
-                totalBytesReadD = 0;
+                totalBytesRead = 0;
                 frameNumber++;
+                const cv::Mat bufferWrapper(buffer, false);
+                anotherDepthImage = cv::imdecode(bufferWrapper, -1);
+                //printf("anotherDepthImage, %dx%d, %d channels, %d depth, %lu step\n", anotherDepthImage.size().width, anotherDepthImage.size().height, anotherDepthImage.channels(), anotherDepthImage.depth(), anotherDepthImage.step);
                 
-                // noise removal
-                //cvScale(imgDepthIn, imgDepthIn, 12);
-                //memcpy(imgDepthOut->imageData, imgDepthIn->imageData, depthBufferLen);
-                for (uint16_t y = 0; y < IMAGE_HEIGHT; y++)
+                if (anotherDepthImage.empty())
                 {
-                    for (uint16_t x = 0; x < IMAGE_WIDTH; x++)
-                    {
-                        setPixel_depthColour(imgDepthDisp, imgDepthIn, x, y);
-                    }
+                    printf("ERROR: Image was empty, not displaying :(\n");
                 }
-                cvScale(imgDepthIn, imgDepthIn, 12);
-                /*if (frameNumber > 2)
+                else
                 {
-                    uint16_t vPrev1, vPrev2, vCurr, vNew;
-                    for (uint16_t y = 0; y < IMAGE_HEIGHT; y++)
-                    {
-                        for (uint16_t x = 0; x < IMAGE_WIDTH; x++)
-                        {
-                            vCurr  = getPixel_DB(imgDepthIn,    x, y);
-                            vPrev1 = getPixel_DB(imgDepthIn_P1, x, y);
-                            //vPrev2 = getPixel_DB(imgDepthIn_P2, x, y);
-                            if (vCurr == 0)
-                            {
-                                vNew = vPrev1;
-                                //vNew = calculateNeighbourhoodAverage_DB(imgDepthIn, x, y, FILTER_SIZE);
-                                //vNew = vPrev + ((vCurr - vPrev) / 2);
-                                setPixel_DB(imgDepthOut, x, y, vNew);
-                            }
-                        }
-                    }
-                }*/
-                //memcpy(imgDepthIn_P2->imageData, imgDepthIn_P1->imageData, depthBufferLen);
-                //memcpy(imgDepthIn_P1->imageData, imgDepthIn->imageData,    depthBufferLen);
-                
-                // scale + show image
-                cvShowImage("Raw Depth Video", imgDepthIn);
-                cvShowImage("Corrected Depth Video", imgDepthDisp);
+                    cv::imshow("DepthVideo", anotherDepthImage);
+                }
                 buttonPress = cvWaitKey(5);
                 
                 // check for exit conditions
                 if (buttonPress >= 0)
                     goto loop_exit;
-                break;  // give the other stream a chance to catch up.
+                break;  // we need a new header
             }
         }
         CHECK_RETURN(bytesRead, "read_depth");
-#endif
-      
-#ifdef COLOR_STREAM
-        while ((bytesRead = read(clientSocketC, (imgColor->imageData + totalBytesReadC), (colorBufferLen - totalBytesReadC))) > 0)
-        {
-            totalBytesReadC += bytesRead;
-            //printf ("Received %d bytes (%d/320000).\n", bytes_read, total_bytes_read);
-            // Check if the buffer is full
-            if (totalBytesReadC >= colorBufferLen)
-            {
-                totalBytesReadC = 0;
-                cvCvtColor(imgColor, imgColor, CV_RGB2BGR);     // convert from OpenNIs RGB to OpenCVs BGR
-                cvShowImage("ColorVideo", imgColor);
-                buttonPress = cvWaitKey(5);
-                if (buttonPress >= 0)
-                    goto loop_exit;
-                break;
-            }
-        }
-        CHECK_RETURN(bytesRead, "read_color");
-#endif
     } loop_exit:
     
     printf("Exitting.\n");
@@ -340,10 +296,10 @@ int main (void)
 #ifdef DEPTH_STREAM
     close(clientSocketD);
     close(serverSocketD);
-    cvReleaseImage(&imgDepthIn);
+    /*cvReleaseImage(&imgDepthIn);
     cvReleaseImage(&imgDepthIn_P1);
     cvReleaseImage(&imgDepthIn_P2);
-    cvReleaseImage(&imgDepthOut);
+    cvReleaseImage(&imgDepthOut);*/
 #endif
 #ifdef COLOR_STREAM
     close(clientSocketC);

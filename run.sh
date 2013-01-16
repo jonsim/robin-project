@@ -2,4 +2,4 @@
 
 gnome-terminal -e "./ProcessVideo"
 echo "REMOTE CODE"
-ssh jpanda "/home/jon/kinect/project/CaptureVideo"
+ssh jpanda "/home/jon/kinect/project/run.sh"
