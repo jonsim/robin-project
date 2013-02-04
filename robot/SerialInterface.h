@@ -28,10 +28,10 @@ public:
     ~SerialInterface (void) {}
     
     void start (void);
-    void writeTo (const char* str);
-    void writeTo (const char* str, const int bytes);
-    void readFrom (char* str);
-    void readFrom (char* str, const int bytes);
+    void writeByte  (const uint8_t  b);
+    void writeBytes (const uint8_t* bs, const int n);
+    uint8_t readByte  (void);
+    void    readBytes (uint8_t* bs, const int n);
 
 private:
     int mSerialPort;

@@ -39,41 +39,44 @@ void SerialInterface::start (void)
 }
 
 
-/// @brief      Shorthand for writeTo(str, strlen(str))
-void SerialInterface::writeTo (const char* str)
+/// @brief      Writes a single byte to the Serial Port.
+/// @param b    The byte to write.
+void SerialInterface::writeByte (const uint8_t b)
 {
-    int retVal = write(mSerialPort, str, strlen(str));
-    CHECK_RETURN(retVal, "SerialInterface::writeTo");
+    int retVal = write(mSerialPort, &b, 1);
+    CHECK_RETURN(retVal, "SerialInterface::writeByte");
 }
 
 
-/// @brief      Writes a given number of bytes from the supplied character array to the Serial Port.
-/// @param str  The character array to write.
-/// @param bytes The number of bytes from the character array to write (ENSURE THIS IS NOT MORE THAN
-///              THE LENGTH OF THE ARRAY).
-void SerialInterface::writeTo (const char* str, const int bytes)
+/// @brief      Writes an array of bytes to the Serial Port.
+/// @param bs   The bytes to write.
+/// @param n    The number of bytes to write. ENSURE THIS IS NOT MORE THAN THE LENGTH OF THE ARRAY.
+void SerialInterface::writeBytes (const uint8_t* bs, const int n)
 {
-    int retVal = write(mSerialPort, str, bytes);
-    CHECK_RETURN(retVal, "SerialInterface::writeTo");
+    int retVal = write(mSerialPort, bs, n);
+    CHECK_RETURN(retVal, "SerialInterface::writeBytes");
 }
 
 
-/// @brief      Shorthand for readFrom(str, sizeof(str))
-void SerialInterface::readFrom (char* str)
+/// @brief      Reads a single byte from the Serial Port.
+///             If INTERFACE_BLOCKING_READ is 1 it will wait until a byte is available to be read.
+/// @return     The byte read.
+uint8_t SerialInterface::readByte (void)
 {
-    int retVal = read(mSerialPort, str, sizeof(str));
-    CHECK_RETURN(retVal, "SerialInterface::readFrom");
+    uint8_t b;
+    int retVal = read(mSerialPort, &b, 1);
+    CHECK_RETURN(retVal, "SerialInterface::readByte");
+    return b;
 }
 
-
-/// @brief      Reads from the Serial Port. If INTERFACE_BLOCKING_READ is 1, this will read the
-///             requested number of bytes into the array (ENSURE THIS IS NOT MORE THAN THE LENGTH OF
-///             THE ARRAY), otherwise it will the requested number of bytes or until the input
+/// @brief      Reads a number of bytes from the Serial Port.
+///             If INTERFACE_BLOCKING_READ is 1, this will read the requested number of bytes into
+///             the array, otherwise it will read the requested number of bytes or until the input
 ///             buffer is empty, whichever is sooner.
-/// @param str  The character array to read into.
-/// @param bytes The number of bytes to read.
-void SerialInterface::readFrom (char* str, const int bytes)
+/// @param bs   The array to read into.
+/// @param n    The number of bytes to read. ENSURE THIS IS NOT MORE THAN THE LENGTH OF THE ARRAY.
+void SerialInterface::readBytes (uint8_t* bs, const int n)
 {
-    int retVal = read(mSerialPort, str, bytes);
-    CHECK_RETURN(retVal, "SerialInterface::readFrom");
+    int retVal = read(mSerialPort, bs, n);
+    CHECK_RETURN(retVal, "SerialInterface::readBytes");
 }

@@ -11,7 +11,12 @@
 
 
 /*-------------------- DEFINES  --------------------*/
-// None.
+enum RobotMode
+{
+    PASSIVE = 128u,
+    SAFE    = 131u,
+    FULL    = 132u
+};
 
 
 /*---------------- CLASS DEFINITION ----------------*/
@@ -19,10 +24,20 @@ class Robot
 {
 public:
     Robot (void);
-    ~Robot (void);
+    ~Robot (void) {}
+    
+    const sint16_t getDistance (void) const;
+    const sint16_t getAngle    (void) const;
 
-//private:
-//    int mVar;
+    void setMode  (const RobotMode rm);
+    void setSpeed (const sint16_t lVel, const sint16_t rVel);
+    void setLEDs  (const bool playLED, const bool advanceLED);
+    
+    void printCharging (void) const;
+    void printStatus   (void) const;
+
+private:
+    SerialInterface mSI;
 };
 
 #endif
