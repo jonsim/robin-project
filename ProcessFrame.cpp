@@ -1,9 +1,9 @@
 // Includes
 #include <stdio.h>
 #include <math.h>
-#include "/usr/include/opencv/cxcore.h"
-#include "/usr/include/opencv/cv.h"
-#include "/usr/include/opencv/highgui.h"
+// opencv
+#include <cv.h>
+#include <highgui.h>
 
 // Defines
 #define IMAGE_WIDTH  640

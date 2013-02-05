@@ -5,13 +5,14 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+// networking
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include "/usr/include/opencv/cxcore.h"
-#include "/usr/include/opencv/cv.h"
-#include "/usr/include/opencv/highgui.h"
+// opencv
+#include <cv.h>
+#include <highgui.h>
 
 // Defines
 #define IMAGE_WIDTH  640
