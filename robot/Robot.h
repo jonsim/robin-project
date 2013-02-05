@@ -45,10 +45,12 @@ public:
     const sint16_t getDistance        (void)       const;
     const sint16_t getAngle           (void)       const;
     
-
     void setMode  (const RobotMode rm);
     void setSpeed (const sint16_t lVel, const sint16_t rVel);
     void setLEDs  (const bool playLED, const bool advanceLED);
+    
+    void startDemo (const uint8_t demo_number);
+    void stopDemo  (void);
     
     void printChargingStatus (void) const;
     void printBatteryStatus  (void) const;

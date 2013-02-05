@@ -201,6 +201,37 @@ void Robot::setLEDs (const bool playLED, const bool advanceLED)
 }
 
 
+/// @brief  Starts the Robot performing the currently requested demo.
+/// @param  demo_number  The id of the demo to perform. This can be:
+///                      0 - Cover - Covers an area using a mixture of techniques.
+///                      1 - Cover & Dock - As Cover, except docking if it comes into the home base.
+///                      2 - Spot Cover - Spirals outward and then inward.
+///                      3 - Mouse - Drives to a wall and then follows.
+///                      4 - Figure Eight - Drive in a figure of eight pattern.
+///                      5 - Wimp - Drives forward when pushed and backs away from obstacles.
+///                      6 - Home - Spins to locate a virtual wall and then drives towards it.
+///                      7 - Tag - As Home, but continuing to the next wall when one is reached.
+///                      8 - Pachelbel - Plays Pachelbel's cannon when a cliff sensor is activated.
+///                      9 - Banjo - Plays a chord (selected by the bumper) from the cliff sensors.
+void Robot::startDemo (const uint8_t demo_number)
+{
+    CHECK_ROBOTMODE(PASSIVE);
+    uint8_t command[2] = {137u, demo_number};
+    
+    mSI->writeBytes(command, sizeof(command));
+}
+
+
+/// @brief  Halts the currently running demo. Does nothing if there is not a demo currently running.
+void Robot::stopDemo (void)
+{
+    CHECK_ROBOTMODE(PASSIVE);
+    uint8_t command[2] = {137u, 255u};
+    
+    mSI->writeBytes(command, sizeof(command));
+}
+
+
 /// @brief  Outputs the current charging status to stdout.
 void Robot::printChargingStatus (void) const
 {
