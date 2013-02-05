@@ -39,6 +39,8 @@ public:
     void           getCliffValues     (uint8_t* r) const;
     void           getBumperValues    (uint8_t* r) const;
     void           getWheelDropValues (uint8_t* r) const;
+    void           getBeaconValues    (uint8_t* r) const;
+    void           getButtonValues    (uint8_t* r) const;
     const uint16_t getWallSignal      (void)       const;
     const sint16_t getDistance        (void)       const;
     const sint16_t getAngle           (void)       const;

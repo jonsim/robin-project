@@ -24,7 +24,7 @@ void Robot::getCliffValues (uint8_t* r) const
                              {142u,  9u},   // returns centre left  state
                              {142u, 12u}};  // returns centre right state
     
-    for (uint8_t i = 0; i < 4; i++)
+    for (uint8_t i = 0u; i < 4u; i++)
     {
         mSI->writeBytes(command[i], sizeof(command[i]));
         r[i] = mSI->readByte();
@@ -44,8 +44,8 @@ void Robot::getBumperValues (uint8_t* r) const
     mSI->writeBytes(command, sizeof(command));
     response = mSI->readByte();
     
-    r[0] = response & 2;
-    r[1] = response & 1;
+    r[0] = response & 2u;
+    r[1] = response & 1u;
 }
 
 
@@ -61,9 +61,48 @@ void Robot::getWheelDropValues (uint8_t* r) const
     mSI->writeBytes(command, sizeof(command));
     response = mSI->readByte();
     
-    r[0] = response & 8;
-    r[1] = response & 4;
-    r[2] = response & 16;
+    r[0] = response &  8u;
+    r[1] = response &  4u;
+    r[2] = response & 16u;
+}
+
+
+/// @brief  Gets the boolean values of the docking beacon beams (stored as uint8_t for efficiency).
+/// @param  The array into which the boolean docking beacon values will be stored. This must be 3
+///         elements long (or more). The values are stored as: [0] = Red Buoy, [1] = Green Buoy,
+///         [2] = Force Field.
+void Robot::getBeaconValues (uint8_t* r) const
+{
+    CHECK_ROBOTMODE(PASSIVE);
+    uint8_t command[2] = {142u, 17u};
+    uint8_t response;
+    
+    mSI->writeBytes(command, sizeof(command));
+    response = mSI->readByte();
+    
+    if ((response & 240u) != 240u)
+        response = 0u;
+    
+    r[0] = response & 8u;    // red
+    r[1] = response & 4u;    // green
+    r[2] = response & 2u;    // forcefield
+}
+
+
+/// @brief  Gets the boolean values of the buttons (stored as uint8_t for efficiency).
+/// @param  The array into which the boolean button values will be stored. This must be 2 elements
+///         long (or more). The values are stored as: [0] = Play Button, [1] = Advance Button.
+void Robot::getButtonValues (uint8_t* r) const
+{
+    CHECK_ROBOTMODE(PASSIVE);
+    uint8_t command[2] = {142u, 18u};
+    uint8_t response;
+    
+    mSI->writeBytes(command, sizeof(command));
+    response = mSI->readByte();
+    
+    r[0] = response & 1u;
+    r[1] = response & 4u;
 }
 
 
