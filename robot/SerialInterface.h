@@ -29,9 +29,9 @@ public:
     
     void start (void);
     void writeByte  (const uint8_t  b);
-    void writeBytes (const uint8_t* bs, const int n);
+    void writeBytes (uint8_t* bs, const uint32_t n);
     uint8_t readByte  (void);
-    void    readBytes (uint8_t* bs, const int n);
+    void    readBytes (uint8_t* bs, const uint32_t n);
 
 private:
     int mSerialPort;

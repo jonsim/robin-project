@@ -13,10 +13,20 @@
 /*-------------------- DEFINES  --------------------*/
 enum RobotMode
 {
+    OFF     = 0u,
     PASSIVE = 128u,
     SAFE    = 131u,
     FULL    = 132u
 };
+
+
+/*--------------------  MACROS  --------------------*/
+// Ensures the robot currently has sufficient permissions to perform the action requested
+#define CHECK_ROBOTMODE(requiredMode)                                       \
+    if (mCurrentMode < requiredMode)                                        \
+    {                                                                       \
+        printf("WARNING: Not in required mode to perform that action.\n");  \
+    }
 
 
 /*---------------- CLASS DEFINITION ----------------*/
@@ -26,18 +36,24 @@ public:
     Robot (void);
     ~Robot (void) {}
     
-    const sint16_t getDistance (void) const;
-    const sint16_t getAngle    (void) const;
+    void           getCliffValues     (uint8_t* r) const;
+    void           getBumperValues    (uint8_t* r) const;
+    void           getWheelDropValues (uint8_t* r) const;
+    const uint16_t getWallSignal      (void)       const;
+    const sint16_t getDistance        (void)       const;
+    const sint16_t getAngle           (void)       const;
+    
 
     void setMode  (const RobotMode rm);
     void setSpeed (const sint16_t lVel, const sint16_t rVel);
     void setLEDs  (const bool playLED, const bool advanceLED);
     
-    void printCharging (void) const;
-    void printStatus   (void) const;
+    void printChargingStatus (void) const;
+    void printBatteryStatus  (void) const;
 
 private:
-    SerialInterface mSI;
+    SerialInterface* mSI;
+    RobotMode        mCurrentMode;
 };
 
 #endif

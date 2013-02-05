@@ -8,14 +8,14 @@ void SerialInterface::start (void)
     
     // First open the interface and check it has worked.
     mSerialPort = open(INTERFACE_NAME, O_RDWR | O_NOCTTY | O_SYNC);
-    CHECK_RETURN(mSerialPort, "Opening the serial interface.");
+    CHECK_RETURN(mSerialPort, "ERROR: Could not open the serial interface");
     
     // Next set the interface's parameters.
     // Create the attribute container and load it with the current values.
     struct termios serialAttributes;
     memset(&serialAttributes, 0, sizeof(serialAttributes));
     retVal = tcgetattr(mSerialPort, &serialAttributes);
-    CHECK_RETURN_NEQ(retVal, "tcgetattr");
+    CHECK_RETURN_NEQ(retVal, "ERROR: tcgetattr");
     
     // Ammend the values as appropriate.
     cfsetospeed (&serialAttributes, INTERFACE_SPEED);       // speed out
@@ -35,7 +35,7 @@ void SerialInterface::start (void)
 
     // Apply the attributes.
     retVal = tcsetattr(mSerialPort, TCSANOW, &serialAttributes);
-    CHECK_RETURN_NEQ(retVal, "tcsetattr");
+    CHECK_RETURN_NEQ(retVal, "ERROR: tcsetattr");
 }
 
 
@@ -44,17 +44,17 @@ void SerialInterface::start (void)
 void SerialInterface::writeByte (const uint8_t b)
 {
     int retVal = write(mSerialPort, &b, 1);
-    CHECK_RETURN(retVal, "SerialInterface::writeByte");
+    CHECK_RETURN(retVal, "ERROR: SerialInterface::writeByte");
 }
 
 
 /// @brief      Writes an array of bytes to the Serial Port.
 /// @param bs   The bytes to write.
 /// @param n    The number of bytes to write. ENSURE THIS IS NOT MORE THAN THE LENGTH OF THE ARRAY.
-void SerialInterface::writeBytes (const uint8_t* bs, const int n)
+void SerialInterface::writeBytes (uint8_t* bs, const uint32_t n)
 {
     int retVal = write(mSerialPort, bs, n);
-    CHECK_RETURN(retVal, "SerialInterface::writeBytes");
+    CHECK_RETURN(retVal, "ERROR: SerialInterface::writeBytes");
 }
 
 
@@ -65,7 +65,7 @@ uint8_t SerialInterface::readByte (void)
 {
     uint8_t b;
     int retVal = read(mSerialPort, &b, 1);
-    CHECK_RETURN(retVal, "SerialInterface::readByte");
+    CHECK_RETURN(retVal, "ERROR: SerialInterface::readByte");
     return b;
 }
 
@@ -75,8 +75,8 @@ uint8_t SerialInterface::readByte (void)
 ///             buffer is empty, whichever is sooner.
 /// @param bs   The array to read into.
 /// @param n    The number of bytes to read. ENSURE THIS IS NOT MORE THAN THE LENGTH OF THE ARRAY.
-void SerialInterface::readBytes (uint8_t* bs, const int n)
+void SerialInterface::readBytes (uint8_t* bs, const uint32_t n)
 {
     int retVal = read(mSerialPort, bs, n);
-    CHECK_RETURN(retVal, "SerialInterface::readBytes");
+    CHECK_RETURN(retVal, "ERROR: SerialInterface::readBytes");
 }
