@@ -16,3 +16,8 @@ sint16_t make_sint16_t (const uint8_t bh, const uint8_t bl)
     sint16_t r = ((bh << 8) + bl) - 0xFFFF;
     return r;
 }
+
+void msleep (const uint32_t msec)
+{
+    usleep(msec * 1000);
+}

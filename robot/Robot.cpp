@@ -170,6 +170,7 @@ void Robot::setMode (const RobotMode rm)
 {
     mSI->writeByte(rm);
     mCurrentMode = rm;
+    msleep(250);
 }
 
 
@@ -303,13 +304,13 @@ void Robot::printBatteryStatus (void) const
 int main (void)
 {
     Robot fred;
-    /*
-    fred.setMode(FULL);
+    
+    fred.setMode(SAFE);
     fred.setSpeed(50, 50);
     fred.setLEDs(true, true);
     sleep(1);
     fred.setSpeed(0, 0);
-    fred.setLEDs(false, false);*/
+    fred.setLEDs(false, false);
     
     fred.printChargingStatus();
     fred.printBatteryStatus();
