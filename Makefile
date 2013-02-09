@@ -19,7 +19,11 @@ OBJ6=Release/RobotClient.o
 EXE1=Robot
 EXE2=RobotClient
 
+MAKE_FLAGS1=-MD -MP -MT "$(DEF1) $(OBJ1)"
+MAKE_FLAGS2=-MD -MP -MT "$(DEF2) $(OBJ2)"
+MAKE_FLAGS3=-MD -MP -MT "$(DEF3) $(OBJ3)"
 MAKE_FLAGS4=-MD -MP -MT "$(DEF4) $(OBJ4)"
+MAKE_FLAGS5=-MD -MP -MT "$(DEF5) $(OBJ5)"
 ARCH_FLAGS=-march=armv7-a -mtune=cortex-a8 -mfpu=neon -fno-tree-pre -fno-strict-aliasing -ftree-vectorize -ffast-math -funsafe-math-optimizations -fsingle-precision-constant -DNDEBUG
 OPENNI_INC_FLAGS=-I/home/jon/kinect/OpenNI/Platform/Linux/Redist/OpenNI-Bin-Dev-Linux-Arm-v1.5.4.0/Include -I/usr/include/ni -Wno-unknown-pragmas
 OPENNI_LNK_FLAGS=-L/home/jon/kinect/OpenNI/Platform/Linux/Redist/OpenNI-Bin-Dev-Linux-Arm-v1.5.4.0/Lib -L./Libs -lOpenNI

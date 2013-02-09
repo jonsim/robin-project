@@ -6,6 +6,6 @@
 #              Syncs data from the jpanda's working directory to the desktop's git repo.
 
 #echo "Syncing with jpanda (PULLING changes)."
-#rsync -vlptgu jon@192.168.43.132:~/robot/* ~/individual_project
+#rsync -vlptgu jon@192.168.43.132:~/individual_project/* ~/individual_project
 echo "Syncing with jpanda (PUSHING changes)."
-rsync -vlptgu ~/individual_project/* jon@192.168.43.132:~/robot
+rsync -vlptgu ~/individual_project/* jon@192.168.43.132:~/individual_project

@@ -22,8 +22,8 @@
 
 
 /*-------------------- DEFINES  --------------------*/
-#define VISION_XML_CONFIG_PATH       "../../Config/SamplesConfig.xml"
-#define VISION_XML_CONFIG_PATH_LOCAL "/home/jon/kinect/project/SamplesConfig.xml"
+#define VISION_XML_CONFIG_PATH       "CameraConfiguration.xml"
+#define VISION_XML_CONFIG_PATH_LOCAL "/home/jon/individual_project/CameraConfiguration.xml"
 #define DEPTH_STREAM
 #define COMPRESSION_QUALITY 80    // quality of streamed images. can be 0-100 with a higher number representing a larger file size but a higher quality image.
 //#define COLOR_STREAM
