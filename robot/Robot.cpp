@@ -303,17 +303,41 @@ void Robot::printBatteryStatus (void) const
 /// @brief  Unit testing.
 int main (void)
 {
-    Robot fred;
+/*    Robot reginald;
     
-    fred.setMode(SAFE);
-    fred.setSpeed(50, 50);
-    fred.setLEDs(true, true);
+    reginald.setMode(SAFE);
+    reginald.setSpeed(50, 50);
+    reginald.setLEDs(true, true);
     sleep(1);
-    fred.setSpeed(0, 0);
-    fred.setLEDs(false, false);
+    reginald.setSpeed(0, 0);
+    reginald.setLEDs(false, false);
     
-    fred.printChargingStatus();
-    fred.printBatteryStatus();
+    reginald.printChargingStatus();
+    reginald.printBatteryStatus();*/
     
+    TCPInterface tim(TCPSERVER, STREAMING_PORT_D);
+    Vision vinny;
+    bool_t clientConnected = false;
+    
+    printf("starting camera loop\n");
+    if (sizeof(uint32_t) != 4)
+        printf("BIG PROBLEMS COMING YOUR WAY, KILL THE PROGRAM BEFORE IT CRASHES YOUR COMPUTER LOL\n");
+    while (1)
+    {
+        if (!clientConnected)
+            clientConnected = tim.checkForClients();
+        
+        vinny.captureFrame();
+        
+        if (clientConnected)
+        {
+            vinny.compressFrame();
+            const std::vector<uint8_t>* streamBuffer = vinny.getStreamingDepthJPEG();
+            uint32_t frameSize = (uint32_t) streamBuffer->size();
+            tim.writeBytes(&frameSize,   4);
+            tim.writeBytes(&(streamBuffer->front()), frameSize);
+        }
+    }
+    printf("UH OH HOW DID WE GET HERE\n");
     return 0;
 }

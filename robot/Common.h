@@ -14,6 +14,9 @@
 
 
 /*-------------------- DEFINES  --------------------*/
+#define IMAGE_WIDTH  640
+#define IMAGE_HEIGHT 480
+
 typedef unsigned char          bool_t;
 typedef unsigned char          uint8_t;
 typedef unsigned short int     uint16_t;
@@ -42,11 +45,12 @@ typedef signed long  int       sint32_t;
         exit(EXIT_FAILURE);         \
     }
 // Check annoying non-standard return values from Xn and report the error if necessary.
-#define CHECK_RETURN_XN(rc, what)                                              \
-    if (rc != XN_STATUS_OK)                                             \
-    {                                                                   \
-        printf("%s failed: %s\n", what, xnGetStatusString(rc));         \
-        return rc;                                                      \
+#define CHECK_RETURN_XN(rc, what)                                \
+    if (rc != XN_STATUS_OK)                                      \
+    {                                                            \
+        printf("%s failed: %s\n", what, xnGetStatusString(rc));  \
+        fflush(stdout);                                          \
+        exit(EXIT_FAILURE);                                      \
     }
 
 

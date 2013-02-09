@@ -8,6 +8,8 @@
 /*-------------------- INCLUDES --------------------*/
 #include "Common.h"
 #include "SerialInterface.h"
+#include "Vision.h"
+#include "TCPInterface.h"
 
 
 /*-------------------- DEFINES  --------------------*/

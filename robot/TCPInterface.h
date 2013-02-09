@@ -16,8 +16,6 @@
 
 
 /*-------------------- DEFINES  --------------------*/
-#define SERVER_ADDRESS JPANDA_ADDRESS
-#define CLIENT_ADDRESS JLAPTOP_ADDRESS
 #define STREAMING_PORT_D 1401
 #define STREAMING_PORT_C 1402
 
@@ -45,17 +43,15 @@ public:
     TCPInterface (TCPInterfaceMode mode, int port);
     ~TCPInterface (void);
     
-    void checkForServers (void);
-    void checkForClients (void);
+    void waitForServerConnection (void);
+    bool checkForClients (void);
     void writeBytes (const void* bs, size_t n);
     void readBytes  (void* bs, size_t n);
-    void writeFrame (void);
-    void readFrame  (void);
 
 
 private:
     void setupServer (void);
-    void setupClient (void);
+    void setupClient (const char* serverAddress);
     void setBlocking (bool_t blocking);
     void connectToServer (void);
     void connectToClient (void);

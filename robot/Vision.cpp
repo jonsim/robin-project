@@ -2,7 +2,7 @@
 
 
 /// @brief  Constructor.
-Vision::Vision (void)
+Vision::Vision (void) : mStreamingDepthRaw(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3)
 {
     loadCameraConfiguration();
     initialiseCamera();
@@ -34,17 +34,17 @@ void Vision::loadCameraConfiguration (void)
     else
     {
         printf("aborting.\n  ERROR: Could not find '%s' nor '%s'.\n" , VISION_XML_CONFIG_PATH, VISION_XML_CONFIG_PATH_LOCAL);
-        return XN_STATUS_ERROR;
+        return;
     }
     
     // Load config file.
     retVal = mContext.InitFromXmlFile(fn, mScriptNode, &errors);
-    if (nRetVal == XN_STATUS_NO_NODE_PRESENT)
+    if (retVal == XN_STATUS_NO_NODE_PRESENT)
     {
         XnChar strError[1024];
         errors.ToString(strError, 1024);
         printf("aborting.\n  ERROR: %s\n", strError);
-        return (retVal);
+        exit(EXIT_FAILURE);
     }
     CHECK_RETURN_XN(retVal, "Open");
 
@@ -65,8 +65,6 @@ void Vision::initialiseCamera (void)
     CHECK_RETURN_XN(retVal, "Find depth generator");
     retVal = mContext.FindExistingNode(XN_NODE_TYPE_IMAGE, mColorGenerator);
     CHECK_RETURN_XN(retVal, "Find image generator");
-    retVal = xnFPSInit(&mXnFPS, 180);
-    CHECK_RETURN_XN(retVal, "FPS Init");
     printf("done.\n");
 }
 
@@ -92,14 +90,9 @@ void Vision::captureFrame (void)
     retVal = mContext.WaitAndUpdateAll();
     CHECK_RETURN_XN(retVal, "UpdateData failed. We could just continue here if this becomes a problem.");
 
-    // Print the FPS
-    xnFPSMarkFrame(&mXnFPS);
-    printf("FPS: %.1f  \r", xnFPSCalc(&mXnFPS));
-    fflush(stdout);
-
     // Read the data into our containers.
     mDepthGenerator.GetMetaData(mDepthMetaData);
-    mDepthData = (const uint16_t*) mDepthMeta.Data();
+    mDepthData = (const uint16_t*) mDepthMetaData.Data();
     
 /*#ifdef COLOR_STREAM
     color.GetMetaData(colorMD);
@@ -115,7 +108,6 @@ void Vision::captureFrame (void)
 ///         JPEG which resides in the mStreamingDataJPEG object variable.
 void Vision::compressFrame (void)
 {
-    static int retVal;
     static int paramsArray[] = {CV_IMWRITE_JPEG_QUALITY, COMPRESSION_QUALITY};
     static std::vector<int> paramsVector(paramsArray, paramsArray + sizeof(paramsArray) / sizeof(int));
     
@@ -123,7 +115,7 @@ void Vision::compressFrame (void)
     createColourDepthImage(&mStreamingDepthRaw, mDepthData);
     
     // Compress it to a JPEG
-    cv::imencode(".JPEG",   mStreamingDepthRaw, mStreamingDepthJPEG, paramsVector);
+    cv::imencode(".JPEG", mStreamingDepthRaw, mStreamingDepthJPEG, paramsVector);
     
     // Stream it
     //retVal = write(clientSocketD, &(mStreamingDepthJPEG.size()), 4);
@@ -133,17 +125,45 @@ void Vision::compressFrame (void)
 }
 
 
+/// @brief  Compresses the currently saved depth frame (loaded from the captureFrame() method) to a
+///         JPEG which resides in the mStreamingDataJPEG object variable.
+void Vision::compressFrameToDisk (const char* filename)
+{
+    static int paramsArray[] = {CV_IMWRITE_JPEG_QUALITY, COMPRESSION_QUALITY};
+    static std::vector<int> paramsVector(paramsArray, paramsArray + sizeof(paramsArray) / sizeof(int));
+    
+    // Produce a human-viewable colour representation of the depth data
+    createColourDepthImage(&mStreamingDepthRaw, mDepthData);
+    
+    // Compress it to a JPEG
+    cv::imwrite(filename, mStreamingDepthRaw, paramsVector);
+    
+    // Stream it
+    //retVal = write(clientSocketD, &(mStreamingDepthJPEG.size()), 4);
+    //CHECK_RETURN(retVal, "streamFrame socket write");
+    //retVal = write(clientSocketD, &(mStreamingDepthJPEG.front()), mStreamingDepthJPEG.size());
+    //CHECK_RETURN(retVal, "streamFrame socket write");
+}
+
+
+const std::vector<uint8_t>* Vision::getStreamingDepthJPEG (void)
+{
+    return &mStreamingDepthJPEG;
+}
+
+
+
 /// @brief  Creates a colour image (as a cv::Mat) representation of the depth data in the given array.
 /// @param  dst   The cv::Mat into which the colour representation will be saved. The size of this
 ///               is defined by the IMAGE_HEIGHT and IMAGE_WIDTH values. The cv::Mat needs to be
 ///               in the CV_8UC3 mode (8 bit RGB).
 /// @param  src   A pointer to the uint16_t array of depth data. The size of this is defined by the
 ///               IMAGE_HEIGHT and IMAGE_WIDTH values.
-void Vision::createColourDepthImage (cv::Mat* dst, uint16_t* src)
+void Vision::createColourDepthImage (cv::Mat* dst, const uint16_t* src)
 {
     static const float scaling_factor = 4800/1530;
     uint16_t x=0, y=0;
-    uint32_t y_offset=0, one_step_offset=0, three_step_offset=0;
+    uint32_t one_step_offset=0, three_step_offset=0;
     uint16_t v;
     uint8_t  r, g, b;
     uint8_t* loc;
@@ -233,13 +253,13 @@ XnBool Vision::fileExists(const char *fn)
 
 
 /// @brief  Unit testing.
-int main (void)
+/*int main (void)
 {
     Vision v;
     
     while (!xnOSWasKeyboardHit())
     {
         v.captureFrame();
-        v.streamFrame();
+        v.compressFrame();
     }
-}
+}*/
