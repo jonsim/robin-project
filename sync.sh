@@ -5,7 +5,7 @@
 # DESCRIPTION: THIS FILE SHOULD LIVE ON THE HOST (DESKTOP) MACHINE.
 #              Syncs data from the jpanda's working directory to the desktop's git repo.
 
-echo "Syncing with jpanda (pulling changes)."
-#rsync -vlptgu -e "ssh" jpanda:~/kinect/OpenNI/Platform/Linux/Redist/OpenNI-Bin-Dev-Linux-Arm-v1.5.4.0/Samples/NiSimpleRead/* .
-rsync -vrlptgu -e "ssh" jpanda:~/kinect/project/* pandaboard/
-cp pandaboard/*.dat .
+#echo "Syncing with jpanda (PULLING changes)."
+#rsync -vlptgu jon@192.168.43.132:~/robot/* ~/individual_project
+echo "Syncing with jpanda (PUSHING changes)."
+rsync -vlptgu ~/individual_project/* jon@192.168.43.132:~/robot

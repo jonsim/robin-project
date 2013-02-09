@@ -13,11 +13,10 @@
 *.a
 
 # Project specific files
-pandaboard/Release/*.o
-pandaboard/Release/*.d
-pandaboard/CaptureFrame
-pandaboard/CaptureVideo
-ProcessFrame
-ProcessVideo
-*.dat
-*.png
+Release/*
+archive/initial_code_host/ProcessFrame
+archive/initial_code_host/ProcessVideo
+archive/initial_code_pandaboard/Libs/*
+archive/initial_code_pandaboard/Release/*
+RobotClient
+Robot
