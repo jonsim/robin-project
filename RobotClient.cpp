@@ -56,6 +56,7 @@ uint32_t RobotClient::getStreamingBufferSize (void) const
 }
 
 
+
 float getDifference_s (timespec* startingTime, timespec* endingTime)
 {
     time_t diff_sec  = endingTime->tv_sec  - startingTime->tv_sec;
@@ -78,6 +79,8 @@ int main (void)
     int      buttonPress;
     timespec frameStart, frameEnd;
     float    timePerFrame, fps, kbps;
+    uint32_t i_fps=0, i_kbps=0;
+    float    CAfps=0, CAkbps=0;
     RobotClient rc;
     
     if (sizeof(uint32_t) != 4)
@@ -98,7 +101,14 @@ int main (void)
         timePerFrame = getDifference_s(&frameStart, &frameEnd);
         fps  = 1.0f / timePerFrame;
         kbps = (rc.getStreamingBufferSize() / 1024.0f) / timePerFrame;
-        printf("FPS: %.1f\tThroughput: %.2f kBps  \r", fps, kbps);
+        
+        i_fps += 1;
+        CAfps += (fps - CAfps) / (i_fps);
+        i_kbps += 1;
+        CAkbps += (kbps - CAkbps) / (i_kbps);
+        
+        
+        printf("FPS: %.1f\tThroughput: %.2f kBps  \r", CAfps, CAkbps);
         fflush(stdout);
     }
     
