@@ -159,10 +159,11 @@ bool TCPInterface::checkForClients (void)
 /// @brief  Writes the supplied bytes to the socket (sending them to the other party).
 /// @param  bs  The bytes to write.
 /// @param  n   The number of bytes from bs to write.
-void TCPInterface::writeBytes (const void* bs, size_t n)
+int TCPInterface::writeBytes (const void* bs, size_t n)
 {
-    int retVal = write(mClientSocket, bs, n);
-    CHECK_RETURN(retVal, "writeBytes");
+    //int retVal = write(mClientSocket, bs, n);
+    //CHECK_RETURN(retVal, "writeBytes");
+    return write(mClientSocket, bs, n);
 }
 
 

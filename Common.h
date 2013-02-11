@@ -11,6 +11,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/select.h> // _kbhit
+#include <sys/ioctl.h>  // _kbhit
+#include <termios.h>    // _kbhit
+#include <stropts.h>    // _kbhit
 
 
 /*-------------------- DEFINES  --------------------*/
@@ -59,5 +63,6 @@ sint8_t  make_sint8_t  (const uint8_t b);
 uint16_t make_uint16_t (const uint8_t bh, const uint8_t bl);
 sint16_t make_sint16_t (const uint8_t bh, const uint8_t bl);
 void     msleep        (const uint32_t msec);
+int      _kbhit        (void);
 
 #endif

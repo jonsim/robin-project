@@ -12,6 +12,14 @@ Robot::Robot (void) : mCurrentMode(OFF)
 }
 
 
+/// @brief  Deconstructor. Ensures the robot is in a safe state to exit (to avoid exitting the
+///         program and having the thing continue moving).
+Robot::~Robot (void)
+{
+    setSpeed(0, 0);
+}
+
+
 /// @brief  Gets the boolean values of the cliff sensors (stored as uint8_t for efficiency).
 /// @param  The array into which the boolean cliff values will be stored. This must be 4 elements
 ///         long (or more). The values are stored as: [0] = Front Left, [1] = Front Right,
@@ -179,11 +187,38 @@ void Robot::setMode (const RobotMode rm)
 /// @param  rVel  The velocity of the right wheel in mm/s. Range = -500 - 500.
 void Robot::setSpeed (const sint16_t lVel, const sint16_t rVel)
 {
+    static sint16_t curr_lVel=0, curr_rVel=0;
     CHECK_ROBOTMODE(SAFE);
-    uint8_t command[5] = {145u,
-                          (uint8_t) (lVel >> 8), (uint8_t) (lVel & 0xFF),
-                          (uint8_t) (rVel >> 8), (uint8_t) (rVel & 0xFF) };
-    mSI->writeBytes(command, sizeof(command));
+    
+    if (lVel != curr_lVel || rVel != curr_rVel)
+    {
+        curr_lVel = lVel;
+        curr_rVel = rVel;
+        uint8_t command[5] = {145u,
+                              (uint8_t) (lVel >> 8), (uint8_t) (lVel & 0xFF),
+                              (uint8_t) (rVel >> 8), (uint8_t) (rVel & 0xFF) };
+        mSI->writeBytes(command, sizeof(command));
+    }
+}
+
+
+/// @brief  Rotates the Robot a given angle. THIS RESETS THE ANGLE ACCUMULATOR READ BY getAngle().
+/// @param  dc  The required rotation in degrees clockwise. A negative value represents an 
+///             anti-clockwise rotation.
+void Robot::targetRotation (const sint16_t dc)
+{
+    CHECK_ROBOTMODE(SAFE);
+    uint16_t ndc = -dc;
+    
+    uint8_t command_header[2] = {152u, 8u};
+    uint8_t command_rotate[5] = {137u, 0u, 0u, (dc < 0) ? 0u : 255u, (dc < 0) ? 1u : 255u};
+    uint8_t command_wait[3]   = {157u, (uint8_t) (ndc >> 8), (uint8_t) (ndc & 0xFF)};
+    
+    mSI->writeBytes(command_header, sizeof(command_header));
+    mSI->writeBytes(command_rotate, sizeof(command_rotate));
+    mSI->writeBytes(command_wait,   sizeof(command_wait  ));
+    mSI->writeByte(153u);
+    
 }
 
 
@@ -303,41 +338,63 @@ void Robot::printBatteryStatus (void) const
 /// @brief  Unit testing.
 int main (void)
 {
-/*    Robot reginald;
+    Robot  reginald;
+    Vision vinny;
+    TCPInterface tim(TCPSERVER, STREAMING_PORT_D);
+    bool_t clientConnected = false;
+    uint32_t depthErrors=0;
+    int retVal;
     
     reginald.setMode(SAFE);
-    reginald.setSpeed(50, 50);
-    reginald.setLEDs(true, true);
-    sleep(1);
-    reginald.setSpeed(0, 0);
-    reginald.setLEDs(false, false);
     
-    reginald.printChargingStatus();
-    reginald.printBatteryStatus();*/
-    
-    TCPInterface tim(TCPSERVER, STREAMING_PORT_D);
-    Vision vinny;
-    bool_t clientConnected = false;
-    
-    printf("starting camera loop\n");
     if (sizeof(uint32_t) != 4)
         printf("BIG PROBLEMS COMING YOUR WAY, KILL THE PROGRAM BEFORE IT CRASHES YOUR COMPUTER LOL\n");
+    printf("starting camera loop...\n");
+    
     while (1)
     {
+        // First check for exit conditions.
+        if (_kbhit())
+            break;
+        
+        // Check for clients trying to connect
+        // TODO this currently blocks and it shoudln't ;(
         if (!clientConnected)
             clientConnected = tim.checkForClients();
         
+        // Sample the camera data
         vinny.captureFrame();
+        vinny.buildDepthHistogram();
+        depthErrors = vinny.queryDepthHistogram(0u);
         
+        // Robot behaviour
+        if (depthErrors > 180000)
+        {
+            reginald.setSpeed(-500, 500);
+            msleep(250);
+        }
+        else
+        {
+            reginald.setSpeed(100, 100);
+        }
+        
+        // Print stats
+        printf("FPS=%.1f  \tHist[0]=%d  \r", vinny.getFPS(), vinny.queryDepthHistogram(0u));
+        fflush(stdout);
+        
+        // If there's a client connected send the depth data to them.
         if (clientConnected)
         {
-            vinny.compressFrame();
-            const std::vector<uint8_t>* streamBuffer = vinny.getStreamingDepthJPEG();
+            const std::vector<uint8_t>* streamBuffer = vinny.compressFrame();
             uint32_t frameSize = (uint32_t) streamBuffer->size();
-            tim.writeBytes(&frameSize,   4);
-            tim.writeBytes(&(streamBuffer->front()), frameSize);
+            retVal = tim.writeBytes(&frameSize, 4);
+            retVal = tim.writeBytes(&(streamBuffer->front()), frameSize);
+            if (retVal < 0)
+                break;
         }
     }
-    printf("UH OH HOW DID WE GET HERE\n");
+    
+    printf("Exitting.\n");
+    
     return 0;
 }

@@ -65,6 +65,8 @@ void Vision::initialiseCamera (void)
     CHECK_RETURN_XN(retVal, "Find depth generator");
     retVal = mContext.FindExistingNode(XN_NODE_TYPE_IMAGE, mColorGenerator);
     CHECK_RETURN_XN(retVal, "Find image generator");
+    retVal = xnFPSInit(&mXnFPS, 180);
+    CHECK_RETURN_XN(retVal, "FPS Init");
     printf("done.\n");
 }
 
@@ -72,7 +74,6 @@ void Vision::initialiseCamera (void)
 /// @brief  Shuts down the camera, releasing all objects associated with it.
 void Vision::shutdownCamera (void)
 {
-    printf("\nExitting.\n");
     mDepthGenerator.Release();
     mColorGenerator.Release();
     mScriptNode.Release();
@@ -106,7 +107,7 @@ void Vision::captureFrame (void)
 
 /// @brief  Compresses the currently saved depth frame (loaded from the captureFrame() method) to a
 ///         JPEG which resides in the mStreamingDataJPEG object variable.
-void Vision::compressFrame (void)
+const std::vector<uint8_t>* Vision::compressFrame (void)
 {
     static int paramsArray[] = {CV_IMWRITE_JPEG_QUALITY, COMPRESSION_QUALITY};
     static std::vector<int> paramsVector(paramsArray, paramsArray + sizeof(paramsArray) / sizeof(int));
@@ -122,6 +123,9 @@ void Vision::compressFrame (void)
     //CHECK_RETURN(retVal, "streamFrame socket write");
     //retVal = write(clientSocketD, &(mStreamingDepthJPEG.front()), mStreamingDepthJPEG.size());
     //CHECK_RETURN(retVal, "streamFrame socket write");
+    
+    // return it
+    return &mStreamingDepthJPEG;
 }
 
 
@@ -146,9 +150,30 @@ void Vision::compressFrameToDisk (const char* filename)
 }
 
 
-const std::vector<uint8_t>* Vision::getStreamingDepthJPEG (void)
+float Vision::getFPS (void)
 {
-    return &mStreamingDepthJPEG;
+    xnFPSMarkFrame(&mXnFPS);
+    return xnFPSCalc(&mXnFPS);
+}
+
+void Vision::buildDepthHistogram (void)
+{
+    uint16_t x, y;
+    uint32_t one_step_offset, i;
+    
+    // zero the histogram
+    for (i = 0; i < MAX_DEPTH; i++)
+        mDepthHistogram[i] = 0;
+    
+    // count the values
+    for (y = 0, one_step_offset = 0; y < IMAGE_HEIGHT; y++)
+        for (x = 0; x < IMAGE_WIDTH; x++, one_step_offset++)
+            mDepthHistogram[mDepthData[one_step_offset]]++;
+}
+
+uint32_t Vision::queryDepthHistogram (uint16_t v)
+{
+    return (v < MAX_DEPTH) ? mDepthHistogram[v] : 0;
 }
 
 

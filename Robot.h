@@ -36,7 +36,7 @@ class Robot
 {
 public:
     Robot (void);
-    ~Robot (void) {}
+    ~Robot (void);
     
     void           getCliffValues     (uint8_t* r) const;
     void           getBumperValues    (uint8_t* r) const;
@@ -47,9 +47,12 @@ public:
     const sint16_t getDistance        (void)       const;
     const sint16_t getAngle           (void)       const;
     
-    void setMode  (const RobotMode rm);
-    void setSpeed (const sint16_t lVel, const sint16_t rVel);
-    void setLEDs  (const bool playLED, const bool advanceLED);
+    void setMode     (const RobotMode rm);
+    void setSpeed    (const sint16_t lVel, const sint16_t rVel);
+    void setLEDs     (const bool playLED, const bool advanceLED);
+    
+    void targetRotation (const sint16_t degreesClockwise);
+    void targetDistance (const sint16_t distance);
     
     void startDemo (const uint8_t demo_number);
     void stopDemo  (void);

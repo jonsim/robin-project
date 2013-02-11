@@ -45,7 +45,7 @@ public:
     
     void waitForServerConnection (void);
     bool checkForClients (void);
-    void writeBytes (const void* bs, size_t n);
+    int  writeBytes (const void* bs, size_t n);
     void readBytes  (void* bs, size_t n);
 
 
