@@ -16,7 +16,10 @@ OBJ5=Release/TCPInterface.o
 SRC6=RobotClient.cpp
 DEF6=Release/RobotClient.d
 OBJ6=Release/RobotClient.o
-EXE1=Robot
+SRC7=RoBin.cpp
+DEF7=Release/RoBin.d
+OBJ7=Release/RoBin.o
+EXE1=RoBin
 EXE2=RobotClient
 
 MAKE_FLAGS1=-MD -MP -MT "$(DEF1) $(OBJ1)"
@@ -24,6 +27,7 @@ MAKE_FLAGS2=-MD -MP -MT "$(DEF2) $(OBJ2)"
 MAKE_FLAGS3=-MD -MP -MT "$(DEF3) $(OBJ3)"
 MAKE_FLAGS4=-MD -MP -MT "$(DEF4) $(OBJ4)"
 MAKE_FLAGS5=-MD -MP -MT "$(DEF5) $(OBJ5)"
+MAKE_FLAGS7=-MD -MP -MT "$(DEF7) $(OBJ7)"
 ARCH_FLAGS=-march=armv7-a -mtune=cortex-a8 -mfpu=neon -fno-tree-pre -fno-strict-aliasing -ftree-vectorize -ffast-math -funsafe-math-optimizations -fsingle-precision-constant -DNDEBUG
 OPENNI_INC_FLAGS=-I/home/jon/kinect/OpenNI/Platform/Linux/Redist/OpenNI-Bin-Dev-Linux-Arm-v1.5.4.0/Include -I/usr/include/ni -Wno-unknown-pragmas
 OPENNI_LNK_FLAGS=-L/home/jon/kinect/OpenNI/Platform/Linux/Redist/OpenNI-Bin-Dev-Linux-Arm-v1.5.4.0/Lib -L./Libs -lOpenNI
@@ -41,14 +45,15 @@ panda: $(EXE1)
 laptop: $(EXE2)
 
 clean:
-	rm -f $(OBJ1) $(OBJ2) $(OBJ3) $(OBJ4) $(OBJ5) $(DEF1) $(DEF2) $(DEF3) $(DEF4) $(DEF5) $(EXE1) $(EXE2)
+	rm -f $(OBJ1) $(OBJ2) $(OBJ3) $(OBJ4) $(OBJ5) $(OBJ7) $(DEF1) $(DEF2) $(DEF3) $(DEF4) $(DEF5) $(DEF7) $(EXE1) $(EXE2)
 
-$(EXE1): $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5)
+$(EXE1): $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC7)
 	g++ $(SRC1) -c $(ARCH_FLAGS) $(CC_FLAGS) $(MAKE_FLAGS4) $(OPENCV_INC_FLAGS) $(OPENNI_INC_FLAGS) $(DEF_FLAGS) -o $(OBJ1)
 	g++ $(SRC2) -c $(ARCH_FLAGS) $(CC_FLAGS) $(MAKE_FLAGS4) $(OPENCV_INC_FLAGS) $(OPENNI_INC_FLAGS) $(DEF_FLAGS) -o $(OBJ2)
 	g++ $(SRC3) -c $(ARCH_FLAGS) $(CC_FLAGS) $(MAKE_FLAGS4) $(OPENCV_INC_FLAGS) $(OPENNI_INC_FLAGS) $(DEF_FLAGS) -o $(OBJ3)
 	g++ $(SRC4) -c $(ARCH_FLAGS) $(CC_FLAGS) $(MAKE_FLAGS4) $(OPENCV_INC_FLAGS) $(OPENNI_INC_FLAGS) $(DEF_FLAGS) -o $(OBJ4)
 	g++ $(SRC5) -c $(ARCH_FLAGS) $(CC_FLAGS) $(MAKE_FLAGS4) $(OPENCV_INC_FLAGS) $(OPENNI_INC_FLAGS) $(DEF_FLAGS) -o $(OBJ5)
+	g++ $(SRC7) -c $(ARCH_FLAGS) $(CC_FLAGS) $(MAKE_FLAGS4) $(OPENCV_INC_FLAGS) $(OPENNI_INC_FLAGS) $(DEF_FLAGS) -o $(OBJ7)
 	g++ $(OBJ1) $(OBJ2) $(OBJ3) $(OBJ4) $(OBJ5) $(OPENCV_LNK_FLAGS) $(OPENNI_LNK_FLAGS) -o $(EXE1)
 
 $(EXE2): $(SRC5)
