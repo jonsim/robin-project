@@ -57,7 +57,7 @@ public:
     void  compressFrameToDisk (const char* filename);
     /*void  buildDepthHistogram (void);
     uint32_t queryDepthHistogram (uint16_t v);*/
-    uint8_t shouldWePanic (void);
+    sint8_t shouldWePanic (void);
     float getFPS (void);
     
 
@@ -90,9 +90,13 @@ private:
     std::vector<uint8_t> mStreamingDepthJPEG;
     // Other image algorithm datas
 //    uint32_t        mDepthHistogram[MAX_DEPTH];
-    uint32_t        mHistogramErrorRangeCount;
-    uint32_t        mHistogramNearRangeCount;
-    Histogram       mHistogram;
+    uint32_t        mLHistogramErrorRangeCount;
+    uint32_t        mLHistogramNearRangeCount;
+    uint32_t        mRHistogramErrorRangeCount;
+    uint32_t        mRHistogramNearRangeCount;
+//    Histogram       mHistogram;
+    Histogram       mLHistogram;
+    Histogram       mRHistogram;
 };
 
 #endif

@@ -4,9 +4,12 @@
 /// @brief  Constructor.
 Vision::Vision (void) : mFrameBuffer(IMAGE_WIDTH, IMAGE_HEIGHT, SUBSAMPLING_FACTOR, FRAME_RETENTION),
                         mStreamingDepthRaw(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3),
-                        mHistogramErrorRangeCount(0),
-                        mHistogramNearRangeCount(0),
-                        mHistogram()
+                        mLHistogramErrorRangeCount(0),
+                        mLHistogramNearRangeCount(0),
+                        mRHistogramErrorRangeCount(0),
+                        mRHistogramNearRangeCount(0),
+                        mLHistogram(),
+                        mRHistogram()
 {
     loadCameraConfiguration();
     initialiseCamera();
@@ -93,17 +96,23 @@ void Vision::captureFrame (void)
     
     // Update the data.
     retVal = mContext.WaitAndUpdateAll();
-    CHECK_RETURN_XN(retVal, "UpdateData failed. We could just continue here if this becomes a problem.");
+    if (retVal != XN_STATUS_OK)
+    {
+        printf("UpdateData failed (%s). Continuing anyway.\n", xnGetStatusString(retVal));
+        return;
+    }
 
     // Read the data into our containers.
     mDepthGenerator.GetMetaData(mDepthMetaData);
     mDepthData = (const uint16_t*) mDepthMetaData.Data();
     
     // Pop this data into the frame buffer.
-    mFrameBuffer.insert(mDepthData);
+//    mFrameBuffer.insert(mDepthData);
     
     // Build the histogram.
-    mHistogram.rebuild(mDepthData, IMAGE_WIDTH*IMAGE_HEIGHT);
+//    mHistogram.rebuild(mDepthData, IMAGE_WIDTH*IMAGE_HEIGHT);
+    mLHistogram.rebuildLeftHalf(mDepthData, IMAGE_WIDTH, IMAGE_HEIGHT);
+    mRHistogram.rebuildRightHalf(mDepthData, IMAGE_WIDTH, IMAGE_HEIGHT);
 }
 
 
@@ -157,40 +166,60 @@ float Vision::getFPS (void)
 
 
 /// @brief  PANIC YET?!?!??!?!???
-/// @return a bool representing whether or not we should be about to freak the shit out.
-uint8_t Vision::shouldWePanic (void)
+/// @return a value representing whether or not we should be about to freak the shit out. a return
+///         of 0 suggests we're all cool, a return of 1 means there is legit grounds for panic on
+///         the right hand side and a return of -1 means we need to worry about something on our left.
+///         in the case that there is something scary on both sides a value of 2 will be returned.
+sint8_t Vision::shouldWePanic (void)
 {
-    uint8_t r = 0;
-    // PANIC?!?!????!?!???!??!?!!!
-    if (mHistogramErrorRangeCount != 0)
+    sint8_t r = 0;
+    // save the old values
+    uint32_t oldLHistogramErrorRangeCount = mLHistogramErrorRangeCount;
+    uint32_t oldLHistogramNearRangeCount  = mLHistogramNearRangeCount;
+    uint32_t oldRHistogramErrorRangeCount = mRHistogramErrorRangeCount;
+    uint32_t oldRHistogramNearRangeCount  = mRHistogramNearRangeCount;
+    
+    // update to the new values
+    mLHistogramErrorRangeCount = mLHistogram.get(0);
+    mLHistogramNearRangeCount  = mLHistogram.getRange(HIST_NEAR_RANGE_START, HIST_NEAR_RANGE_END);
+    mRHistogramErrorRangeCount = mRHistogram.get(0);
+    mRHistogramNearRangeCount  = mRHistogram.getRange(HIST_NEAR_RANGE_START, HIST_NEAR_RANGE_END);
+    
+    // check we're initialised. if we're not return no panic.
+    if (mLHistogramErrorRangeCount == 0)
+        return 0;
+    
+    // look right for scary shit
+    // check for static panic threshold
+    if (mRHistogramErrorRangeCount > HIST_STATIC_PANIC_THRESHOLD)
     {
-        uint32_t oldHistogramErrorRangeCount = mHistogramErrorRangeCount;
-        uint32_t oldHistogramNearRangeCount  = mHistogramNearRangeCount;
-        mHistogramErrorRangeCount = mHistogram.get(0);
-        mHistogramNearRangeCount  = mHistogram.getRange(HIST_NEAR_RANGE_START, HIST_NEAR_RANGE_END);
-
-        // check for static panic threshold
-        if (mHistogramErrorRangeCount > HIST_STATIC_PANIC_THRESHOLD)
-        {
-            printf("STATIC PANIC! :O\n");
-            r = 1;
-        }
-
-        // check for dynamic panic threshold
-        /*if (histogramNearRangeCount > (oldHistogramNearRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD))
-            printf("DYNAMIC PANIC! :O\n");*/
-        if ((mHistogramNearRangeCount  < (oldHistogramNearRangeCount  - HIST_DYNAMIC_PANIC_THRESHOLD)) &&
-            (mHistogramErrorRangeCount > (oldHistogramErrorRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD))   )
-        {
-            printf("DYNAMIC PANIC! :O\n");
-            r = 1;
-        }
+        printf("PANIC RIGHT (static)\n");
+        r = 1;
     }
-    else
+    // check for dynamic panic threshold
+    if ((mRHistogramNearRangeCount  < (oldRHistogramNearRangeCount  - HIST_DYNAMIC_PANIC_THRESHOLD)) &&
+        (mRHistogramErrorRangeCount > (oldRHistogramErrorRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD))   )
     {
-        mHistogramErrorRangeCount = mHistogram.get(0);
-        mHistogramNearRangeCount  = mHistogram.getRange(HIST_NEAR_RANGE_START, HIST_NEAR_RANGE_END);
+        printf("PANIC RIGHT (dynamic)\n");
+        r = 1;
     }
+    
+    // look left for scary shit
+    // check for static panic threshold
+    if (mLHistogramErrorRangeCount > HIST_STATIC_PANIC_THRESHOLD)
+    {
+        printf("PANIC LEFT (static)\n");
+        r = (r == 1) ? 2 : -1;
+    }
+    // check for dynamic panic threshold
+    if ((mLHistogramNearRangeCount  < (oldLHistogramNearRangeCount  - HIST_DYNAMIC_PANIC_THRESHOLD)) &&
+        (mLHistogramErrorRangeCount > (oldLHistogramErrorRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD))   )
+    {
+        printf("PANIC LEFT (dynamic)\n");
+        r = (r == 1) ? 2 : -1;
+    }
+    
+    // return
     return r;
 }
 

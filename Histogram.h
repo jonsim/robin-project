@@ -81,6 +81,30 @@ public:
             mHist[MIN(data[one_step_index], mMaxValue)]++;
     }
     
+    void rebuildLeftHalf (const uint16_t* data, const uint16_t xres, const uint16_t yres)
+    {
+        uint16_t x, y;
+        uint16_t half_xres = xres/2;
+        uint32_t one_step_index;
+        
+        memset(mHist, 0, (mMaxValue+1) * sizeof(uint32_t));
+        for (one_step_index = 0, y = 0; y < yres;      y++, one_step_index+=half_xres)
+            for (         x = 0;        x < half_xres; x++, one_step_index++)
+                mHist[MIN(data[one_step_index], mMaxValue)]++;
+    }
+    
+    void rebuildRightHalf (const uint16_t* data, const uint16_t xres, const uint16_t yres)
+    {
+        uint16_t x, y;
+        uint16_t half_xres = xres/2;
+        uint32_t one_step_index;
+        
+        memset(mHist, 0, (mMaxValue+1) * sizeof(uint32_t));
+        for (one_step_index = half_xres, y = 0; y < yres; y++, one_step_index+=half_xres)
+            for (         x = half_xres;        x < xres; x++, one_step_index++)
+                mHist[MIN(data[one_step_index], mMaxValue)]++;
+    }
+    
     
     /// @brief  Retrieves the count (number of occurances) of a given value from the histogram.
     /// @brief  value   The value to retrieve.

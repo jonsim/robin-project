@@ -20,8 +20,13 @@
 #define HIST_NEAR_RANGE_START        400 // mm
 #define HIST_NEAR_RANGE_END          600 // mm
 #define DIFFERENCE_THRESHOLD          30 // mm
-#define HIST_STATIC_PANIC_THRESHOLD  180000 // this many readings in the near range will cause instant panic
-#define HIST_DYNAMIC_PANIC_THRESHOLD  13000 // this many readings suddenly transitioning out of the near range will cause panic
+#define MEAN_SUBSAMPLING
+// values for full frame 640x480 res
+//#define HIST_STATIC_PANIC_THRESHOLD  180000 // this many readings in the near range will cause instant panic
+//#define HIST_DYNAMIC_PANIC_THRESHOLD  13000 // this many readings suddenly transitioning out of the near range will cause panic
+// values for half frame 640x480 res
+#define HIST_STATIC_PANIC_THRESHOLD  100000 // this many readings in the near range will cause instant panic
+#define HIST_DYNAMIC_PANIC_THRESHOLD  14000 // this many readings suddenly transitioning out of the near range will cause panic
 
 
 
@@ -132,8 +137,34 @@ public:
 
         // copy the data into the frame buffer, sampling every sampling_factor pixels. this will overwrite whatever's in the buffer already.
         for (one_step_index=0, sample_step_index=0, data_y=0; data_y < input_yres; data_y+=resampling_factor, sample_step_index=(data_y*input_xres))
+        {
             for (                                   data_x=0; data_x < input_xres; data_x+=resampling_factor, sample_step_index+=resampling_factor, one_step_index++)
+            {
+#ifdef MEAN_SUBSAMPLING
+                uint32_t pixel_sum   = 0;
+                uint16_t pixel_count = 0;
+                uint16_t pixel_value = 0;
+                for (uint16_t mean_y = 0; mean_y < sample_step_index; mean_y++)
+                {
+                    for (uint16_t mean_x = 0; mean_x < sample_step_index; mean_x++)
+                    {
+                        pixel_value = data[(data_x+mean_x) + ((data_y+mean_y) * input_xres)];
+                        if (pixel_value != 0)
+                        {
+                            pixel_sum += pixel_value;
+                            pixel_count++;
+                        }
+                    }
+                }
+                if (pixel_count == 0)
+                    frame[one_step_index] = 0;
+                else
+                    frame[one_step_index] = pixel_sum / pixel_count;
+#else               
                 frame[one_step_index] = data[sample_step_index];
+#endif
+            }
+        }
 
         // build a histogram from the newly sampled data.
         Histogram* hist = *(histogramBuffer.add());
