@@ -19,6 +19,9 @@
 // opencv
 #include <cv.h>
 #include <highgui.h>
+// my stuff
+#include "FrameBuffer.h"
+#include "Histogram.h"
 
 
 /*-------------------- DEFINES  --------------------*/
@@ -32,6 +35,8 @@
     #error "NO COLOUR STREAM PLESE :(... or write it yourself"
 #endif
 
+#define SUBSAMPLING_FACTOR             8
+#define FRAME_RETENTION                5
 
 /*--------------------  MACROS  --------------------*/
 // None.
@@ -50,8 +55,9 @@ public:
     void  captureFrame  (void);
     const std::vector<uint8_t>* compressFrame (void);
     void  compressFrameToDisk (const char* filename);
-    void  buildDepthHistogram (void);
-    uint32_t queryDepthHistogram (uint16_t v);
+    /*void  buildDepthHistogram (void);
+    uint32_t queryDepthHistogram (uint16_t v);*/
+    uint8_t shouldWePanic (void);
     float getFPS (void);
     
 
@@ -67,21 +73,26 @@ private:
     XnBool fileExists             (const char *fn);
     
     // Vision Variables
+    // Image containers
+    FrameBuffer     mFrameBuffer;
+    // OpenNI image containers
     Context         mContext;
     ScriptNode      mScriptNode;
-    // OpenNI image containers
     DepthGenerator  mDepthGenerator;
-    ImageGenerator  mColorGenerator;
+//    ImageGenerator  mColorGenerator;
     DepthMetaData   mDepthMetaData;
-    ImageMetaData   mColorMetaData;
+//    ImageMetaData   mColorMetaData;
     const uint16_t* mDepthData;
+//    const uint8_t*  mColorData;
     XnFPSData       mXnFPS;
-    //const uint8_t*  mColorData;
     // OpenCV image containers
     cv::Mat              mStreamingDepthRaw;
     std::vector<uint8_t> mStreamingDepthJPEG;
     // Other image algorithm datas
-    uint32_t        mDepthHistogram[MAX_DEPTH];
+//    uint32_t        mDepthHistogram[MAX_DEPTH];
+    uint32_t        mHistogramErrorRangeCount;
+    uint32_t        mHistogramNearRangeCount;
+    Histogram       mHistogram;
 };
 
 #endif

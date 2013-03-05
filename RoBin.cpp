@@ -16,19 +16,19 @@
 /// @brief  Unit testing.
 int main (void)
 {
+    // function variables
+    bool_t clientConnected = false;
+    uint8_t bumperValues[2];
+    int retVal;
+    // module objects
     Robot  reginald;
     Vision vinny;
     TCPInterface tim(TCPSERVER, STREAMING_PORT_D);
-    bool_t clientConnected = false;
-    uint32_t depthErrors=0;
-    int retVal;
     
+    // set the robot to safe mode (allowing us to move).
     reginald.setMode(SAFE);
     
-    if (sizeof(uint32_t) != 4)
-        printf("BIG PROBLEMS COMING YOUR WAY, KILL THE PROGRAM BEFORE IT CRASHES YOUR COMPUTER LOL\n");
     printf("starting camera loop...\n");
-    
     while (1)
     {
         // First check for exit conditions.
@@ -42,11 +42,16 @@ int main (void)
         
         // Sample the camera data
         vinny.captureFrame();
-        vinny.buildDepthHistogram();
-        depthErrors = vinny.queryDepthHistogram(0u);
         
         // Robot behaviour
-        if (depthErrors > 180000)
+        vinny.shouldWePanic();
+        
+        reginald.getBumperValues(bumperValues);
+        if (bumperValues[0])
+            printf("left bump!\n");
+        if (bumperValues[1])
+            printf("right bump!\n");
+        /*if (depthErrors > 180000)
         {
             reginald.setSpeed(-500, 500);
             msleep(250);
@@ -54,10 +59,10 @@ int main (void)
         else
         {
             reginald.setSpeed(100, 100);
-        }
+        }*/
         
         // Print stats
-        printf("FPS=%.1f  \tHist[0]=%d  \r", vinny.getFPS(), vinny.queryDepthHistogram(0u));
+        printf("FPS=%.1f  \r", vinny.getFPS());
         fflush(stdout);
         
         // If there's a client connected send the depth data to them.

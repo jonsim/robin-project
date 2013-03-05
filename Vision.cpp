@@ -2,7 +2,11 @@
 
 
 /// @brief  Constructor.
-Vision::Vision (void) : mStreamingDepthRaw(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3)
+Vision::Vision (void) : mFrameBuffer(IMAGE_WIDTH, IMAGE_HEIGHT, SUBSAMPLING_FACTOR, FRAME_RETENTION),
+                        mStreamingDepthRaw(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3),
+                        mHistogramErrorRangeCount(0),
+                        mHistogramNearRangeCount(0),
+                        mHistogram()
 {
     loadCameraConfiguration();
     initialiseCamera();
@@ -63,8 +67,8 @@ void Vision::initialiseCamera (void)
     fflush(stdout);
     retVal = mContext.FindExistingNode(XN_NODE_TYPE_DEPTH, mDepthGenerator);
     CHECK_RETURN_XN(retVal, "Find depth generator");
-    retVal = mContext.FindExistingNode(XN_NODE_TYPE_IMAGE, mColorGenerator);
-    CHECK_RETURN_XN(retVal, "Find image generator");
+//    retVal = mContext.FindExistingNode(XN_NODE_TYPE_IMAGE, mColorGenerator);
+//    CHECK_RETURN_XN(retVal, "Find image generator");
     retVal = xnFPSInit(&mXnFPS, 180);
     CHECK_RETURN_XN(retVal, "FPS Init");
     printf("done.\n");
@@ -75,7 +79,7 @@ void Vision::initialiseCamera (void)
 void Vision::shutdownCamera (void)
 {
     mDepthGenerator.Release();
-    mColorGenerator.Release();
+    //mColorGenerator.Release();
     mScriptNode.Release();
     mContext.Release();
 }
@@ -95,13 +99,11 @@ void Vision::captureFrame (void)
     mDepthGenerator.GetMetaData(mDepthMetaData);
     mDepthData = (const uint16_t*) mDepthMetaData.Data();
     
-/*#ifdef COLOR_STREAM
-    color.GetMetaData(colorMD);
-    const XnRGB24Pixel* colorData = colorMD.RGB24Data();
-    retVal = write(clientSocketC, colorData, colorBufferLen);
-    if (retVal < 0)
-        break;
-#endif*/
+    // Pop this data into the frame buffer.
+    mFrameBuffer.insert(mDepthData);
+    
+    // Build the histogram.
+    mHistogram.rebuild(mDepthData, IMAGE_WIDTH*IMAGE_HEIGHT);
 }
 
 
@@ -112,19 +114,13 @@ const std::vector<uint8_t>* Vision::compressFrame (void)
     static int paramsArray[] = {CV_IMWRITE_JPEG_QUALITY, COMPRESSION_QUALITY};
     static std::vector<int> paramsVector(paramsArray, paramsArray + sizeof(paramsArray) / sizeof(int));
     
-    // Produce a human-viewable colour representation of the depth data
+    // Produce a human-viewable colour representation of the depth data.
     createColourDepthImage(&mStreamingDepthRaw, mDepthData);
     
-    // Compress it to a JPEG
+    // Compress it to a JPEG.
     cv::imencode(".JPEG", mStreamingDepthRaw, mStreamingDepthJPEG, paramsVector);
     
-    // Stream it
-    //retVal = write(clientSocketD, &(mStreamingDepthJPEG.size()), 4);
-    //CHECK_RETURN(retVal, "streamFrame socket write");
-    //retVal = write(clientSocketD, &(mStreamingDepthJPEG.front()), mStreamingDepthJPEG.size());
-    //CHECK_RETURN(retVal, "streamFrame socket write");
-    
-    // return it
+    // Return it.
     return &mStreamingDepthJPEG;
 }
 
@@ -150,15 +146,57 @@ void Vision::compressFrameToDisk (const char* filename)
 }
 
 
+/// @brief  Records this function call as a frame and returns the current FPS. It is therefore vital
+///         this function is called EXACTLY once per frame, no more, no less.
+/// @return The current FPS.
 float Vision::getFPS (void)
 {
     xnFPSMarkFrame(&mXnFPS);
     return xnFPSCalc(&mXnFPS);
 }
 
-void Vision::buildDepthHistogram (void)
+
+/// @brief  PANIC YET?!?!??!?!???
+/// @return a bool representing whether or not we should be about to freak the shit out.
+uint8_t Vision::shouldWePanic (void)
 {
-    uint16_t x, y;
+    uint8_t r = 0;
+    // PANIC?!?!????!?!???!??!?!!!
+    if (mHistogramErrorRangeCount != 0)
+    {
+        uint32_t oldHistogramErrorRangeCount = mHistogramErrorRangeCount;
+        uint32_t oldHistogramNearRangeCount  = mHistogramNearRangeCount;
+        mHistogramErrorRangeCount = mHistogram.get(0);
+        mHistogramNearRangeCount  = mHistogram.getRange(HIST_NEAR_RANGE_START, HIST_NEAR_RANGE_END);
+
+        // check for static panic threshold
+        if (mHistogramErrorRangeCount > HIST_STATIC_PANIC_THRESHOLD)
+        {
+            printf("STATIC PANIC! :O\n");
+            r = 1;
+        }
+
+        // check for dynamic panic threshold
+        /*if (histogramNearRangeCount > (oldHistogramNearRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD))
+            printf("DYNAMIC PANIC! :O\n");*/
+        if ((mHistogramNearRangeCount  < (oldHistogramNearRangeCount  - HIST_DYNAMIC_PANIC_THRESHOLD)) &&
+            (mHistogramErrorRangeCount > (oldHistogramErrorRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD))   )
+        {
+            printf("DYNAMIC PANIC! :O\n");
+            r = 1;
+        }
+    }
+    else
+    {
+        mHistogramErrorRangeCount = mHistogram.get(0);
+        mHistogramNearRangeCount  = mHistogram.getRange(HIST_NEAR_RANGE_START, HIST_NEAR_RANGE_END);
+    }
+    return r;
+}
+
+/*void Vision::buildDepthHistogram (void)
+{
+/    uint16_t x, y;
     uint32_t one_step_offset, i;
     
     // zero the histogram
@@ -168,13 +206,14 @@ void Vision::buildDepthHistogram (void)
     // count the values
     for (y = 0, one_step_offset = 0; y < IMAGE_HEIGHT; y++)
         for (x = 0; x < IMAGE_WIDTH; x++, one_step_offset++)
-            mDepthHistogram[mDepthData[one_step_offset]]++;
+            mDepthHistogram[mDepthData[one_step_offset]]++;/
 }
 
 uint32_t Vision::queryDepthHistogram (uint16_t v)
 {
-    return (v < MAX_DEPTH) ? mDepthHistogram[v] : 0;
-}
+//    return (v < MAX_DEPTH) ? mDepthHistogram[v] : 0;
+    return mHistogram.get(v);
+}*/
 
 
 

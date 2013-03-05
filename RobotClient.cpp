@@ -93,8 +93,8 @@ int main (void)
         // bulk of the loop
         rc.receiveFrame();
         buttonPress = rc.displayFrame();
-        if (buttonPress >= 0)
-            break;
+/*        if (buttonPress >= 0)
+            break;*/
         
         // calculate and print fps (and other stats).
         clock_gettime(CLOCK_MONOTONIC, &frameEnd);

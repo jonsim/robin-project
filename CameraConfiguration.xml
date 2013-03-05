@@ -19,7 +19,7 @@
 		-->
 	
 		<!-- Set global mirror -->
-		<GlobalMirror on="true"/>
+		<GlobalMirror on="false"/>
 		
 		<!-- Create a depth node and give it a name alias (useful if referenced ahead in this script) -->
 		<Node type="Depth" name="MyDepth">

@@ -42,7 +42,8 @@ void Robot::getCliffValues (uint8_t* r) const
 
 /// @brief  Gets the boolean values of the front bumper (stored as uint8_t for efficiency).
 /// @param  The array into which the boolean bumper values will be stored. This must be 2 elements
-///         long (or more). The values are stored as: [0] = Left, [1] = Right.
+///         long (or more). The values are stored as: [0] = Left, [1] = Right. A value of 0 means
+///         no bumper activation, a value of 1 means bumper activation.
 void Robot::getBumperValues (uint8_t* r) const
 {
     CHECK_ROBOTMODE(PASSIVE);

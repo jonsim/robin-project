@@ -15,10 +15,6 @@
 
 /*-------------------- DEFINES  --------------------*/
 #define HIST_MAX_VALUE              5000 // mm
-#define HIST_NEAR_RANGE_START        400 // mm
-#define HIST_NEAR_RANGE_END          600 // mm
-#define HIST_STATIC_PANIC_THRESHOLD  500 // this many readings in the near range will cause instant panic
-#define HIST_DYNAMIC_PANIC_THRESHOLD 100 // this many readings suddenly transitioning out of the near range will cause panic
 
 
 
@@ -37,7 +33,7 @@ public:
     ///         initialised to zeros.
     Histogram (void) : mMaxValue(HIST_MAX_VALUE)
     {
-        mHist = (uint16_t*) calloc(mMaxValue+1, sizeof(uint16_t));
+        mHist = (uint32_t*) calloc(mMaxValue+1, sizeof(uint32_t));
     }
     
     
@@ -47,7 +43,7 @@ public:
     ///                         different constructor.
     Histogram (const uint16_t maximum_value) : mMaxValue(maximum_value)
     {
-        mHist = (uint16_t*) calloc(mMaxValue+1, sizeof(uint16_t));
+        mHist = (uint32_t*) calloc(mMaxValue+1, sizeof(uint32_t));
     }
     
     
@@ -59,7 +55,7 @@ public:
     {
         uint32_t one_step_index;
 
-        mHist = (uint16_t*) calloc(mMaxValue+1, sizeof(uint16_t));
+        mHist = (uint32_t*) calloc(mMaxValue+1, sizeof(uint32_t));
         for (one_step_index = 0; one_step_index < data_count; one_step_index++)
             mHist[MIN(data[one_step_index], mMaxValue)]++;
     }
@@ -80,7 +76,7 @@ public:
     {
         uint32_t one_step_index;
 
-        memset(mHist, 0, (mMaxValue+1) * sizeof(uint16_t));
+        memset(mHist, 0, (mMaxValue+1) * sizeof(uint32_t));
         for (one_step_index = 0; one_step_index < data_count; one_step_index++)
             mHist[MIN(data[one_step_index], mMaxValue)]++;
     }
@@ -89,7 +85,7 @@ public:
     /// @brief  Retrieves the count (number of occurances) of a given value from the histogram.
     /// @brief  value   The value to retrieve.
     /// @return         The number of occurances of value in the histogram.
-    inline uint16_t get (const uint16_t value) const
+    inline uint32_t get (const uint16_t value) const
     {
         return mHist[MIN(value, mMaxValue)];
     }
@@ -113,7 +109,7 @@ public:
     
 private:
     uint16_t  mMaxValue;    ///< The maximum value the histogram can represent.
-    uint16_t* mHist;        ///< The array in which the histogram data is stored.
+    uint32_t* mHist;        ///< The array in which the histogram data is stored.
 };
 
 #endif

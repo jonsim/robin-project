@@ -9,8 +9,19 @@
 /*-------------------- INCLUDES --------------------*/
 #include <stdio.h>
 #include <stdlib.h>
+#include "CircularBuffer.h"
 #include "BinaryMarker.h"
 #include "Histogram.h"
+
+
+
+
+/*-------------------- DEFINES --------------------*/
+#define HIST_NEAR_RANGE_START        400 // mm
+#define HIST_NEAR_RANGE_END          600 // mm
+#define DIFFERENCE_THRESHOLD          30 // mm
+#define HIST_STATIC_PANIC_THRESHOLD  180000 // this many readings in the near range will cause instant panic
+#define HIST_DYNAMIC_PANIC_THRESHOLD  13000 // this many readings suddenly transitioning out of the near range will cause panic
 
 
 
@@ -43,23 +54,23 @@ public:
     /// @param  frame_retention   The number of previous frames (added with the insert() function) to
     ////                store. Frames get discarded when they pass this limit.
     FrameBuffer  (const uint16_t xres, const uint16_t yres, const uint16_t sampling_factor, const uint8_t frame_retention) :
+      output_xres(xres / sampling_factor),
+      output_yres(yres / sampling_factor),
+      output_frame_res(output_xres * output_yres),
+      subtractionBuffer(output_frame_res),
       input_xres(xres),
       input_yres(yres),
       input_frame_res(input_xres * input_yres),
       resampling_factor(sampling_factor),
-      output_xres(xres / sampling_factor),
-      output_yres(yres / sampling_factor),
-      output_frame_res(output_xres * output_yres),
       pixel_size((PIXEL_SIZE * IMAGE_WIDTH * 2) / output_xres),
       projection_constant(pixel_size / FOCAL_LENGTH),
-      retention(frame_retention),
       histogramNearRangeCount(0),
       histogramErrorRangeCount(0),
+      retention(frame_retention),
       lead_in_count(frame_retention),
       dataBuffer(frame_retention),   // TODO not because of the way I use the buffer the extra space which is supposed to be free isn't.
                                      // this is not a problem but means a frame_retention of < 2 is not possible. Also the pre-load would break.
-      histogramBuffer(frame_retention), // same problem as above
-      subtractionBuffer(output_frame_res)
+      histogramBuffer(frame_retention) // same problem as above
     {
         uint8_t i;
 
@@ -233,6 +244,7 @@ public:
     }
     
     
+#ifdef MATPLOT
     /// @brief  Projects all the pixels in a given frame to 3D space and fills in their x/y/z
     ///         co-ordinates in the provided vectors, in order of their appearence in the data array.
     ///         This function should only be used for 3D visualisation.
@@ -315,6 +327,7 @@ public:
             }
         }
     }
+#endif
     
     
     /// @brief  Calculates the Euclidian-Distance^2 between two points (given as their 2D x/y pixel
