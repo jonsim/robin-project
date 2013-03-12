@@ -332,3 +332,13 @@ void Robot::printBatteryStatus (void) const
     // print
     printf("Battery status: %d mV, %d mA, %d'C, %d / %d mAh.\n", voltage, current, temperature, charge, capacity);
 }
+
+
+/// @brief  Updates the Robot's internal map with the latest actuator readings. It is strongly
+///         recommended to call this every time a new movement instruction is issued.
+void Robot::updateMap (void)
+{
+    const sint16_t latestDistance = getDistance();
+    const sint16_t latestAngle = getAngle();
+    mMap.addRelativeReadings(latestDistance, latestAngle);
+}

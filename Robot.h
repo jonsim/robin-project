@@ -8,6 +8,7 @@
 /*-------------------- INCLUDES --------------------*/
 #include "Common.h"
 #include "SerialInterface.h"
+#include "GridMap.h"
 
 
 /*-------------------- DEFINES  --------------------*/
@@ -57,10 +58,13 @@ public:
     
     void printChargingStatus (void) const;
     void printBatteryStatus  (void) const;
+    
+    void updateMap (void);
 
 private:
     SerialInterface* mSI;
     RobotMode        mCurrentMode;
+    GridMap          mMap;
 };
 
 #endif

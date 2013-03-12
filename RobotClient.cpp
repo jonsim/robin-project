@@ -83,9 +83,6 @@ int main (void)
     float    CAfps=0, CAkbps=0;
     RobotClient rc;
     
-    if (sizeof(uint32_t) != 4)
-        printf("BIG PROBLEMS COMING YOUR WAY, KILL THE PROGRAM BEFORE IT CRASHES YOUR COMPUTER LOL\n");
-    
     while (1)
     {
         clock_gettime(CLOCK_MONOTONIC, &frameStart);
@@ -110,6 +107,12 @@ int main (void)
         
         printf("FPS: %.1f\tThroughput: %.2f kBps  \r", CAfps, CAkbps);
         fflush(stdout);
+        
+        if (fps > 60.0f)
+        {
+            printf("FPS exceeded upper bound, the server has probably gone down.\n");
+            break;
+        }
     }
     
     printf("\nExitting.\n");

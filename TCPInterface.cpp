@@ -35,7 +35,11 @@ void TCPInterface::setupServer (void)
     // Create an IP streaming socket (which uses TCP).
     mServerSocket = socket(PF_INET, SOCK_STREAM, 0);
     CHECK_RETURN(mServerSocket, "socket");
-
+    
+    // Set SO_REUSEADDR so that we can rebind to the same addr/port (as the server) after an unclean shutdown.
+    int socket_optval = 1;
+    setsockopt(mServerSocket, SOL_SOCKET, SO_REUSEADDR, &socket_optval, sizeof(socket_optval));
+    
     // Bind to the port, setting up the address of the server given by the defines.
 	// Note that both address and port number must be in network byte order.
     memset(&mServerAddress, 0, sizeof(mServerAddress));
@@ -78,8 +82,8 @@ void TCPInterface::setupClient (const char* serverAddress)
 void TCPInterface::shutdownServer (void)
 {
     CHECK_TCPMODE(TCPSERVER);
-    close(mClientSocket);
     close(mServerSocket);
+    close(mClientSocket);
 }
 
 

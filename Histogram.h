@@ -119,7 +119,7 @@ public:
     /// @param  starting_value  The value at the start of the range.
     /// @param  ending_value    The value at the end of the range.
     /// @return The number of occurances of all values in the range.
-    inline uint32_t getRange (const uint16_t starting_value, uint16_t ending_value) const
+    inline uint32_t getRange (uint16_t starting_value, uint16_t ending_value) const
     {
         uint16_t i;
         uint32_t accumulator = 0;
@@ -130,10 +130,30 @@ public:
         return accumulator;
     }
     
+    inline void getRangeAndStore (uint16_t starting_value, uint16_t ending_value, const uint8_t store_position)
+    {
+        uint32_t r = getRange(starting_value, ending_value);
+        if (store_position == 1)
+            mRange1_store = r;
+        else if (store_position == 2)
+            mRange2_store = r;
+    }
+    
+    inline uint32_t retrieveRangeFromStore (const uint8_t store_position) const
+    {
+        if (store_position == 1)
+            return mRange1_store;
+        if (store_position == 2)
+            return mRange2_store;
+        return 0;
+    }
+    
     
 private:
-    uint16_t  mMaxValue;    ///< The maximum value the histogram can represent.
-    uint32_t* mHist;        ///< The array in which the histogram data is stored.
+    uint32_t  mRange1_store;  ///< A storage space for a range output.
+    uint32_t  mRange2_store;  ///< A storage space for a range output.
+    uint16_t  mMaxValue;      ///< The maximum value the histogram can represent.
+    uint32_t* mHist;          ///< The array in which the histogram data is stored.
 };
 
 #endif

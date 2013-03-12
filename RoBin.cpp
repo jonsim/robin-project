@@ -9,10 +9,10 @@
 #include "Vision.h"
 #include "TCPInterface.h"
 
-#define MOVEMENT_ENABLED
-#define ATOMIC_TURN_AMOUNT  20 // FPS delay
-#define MOVE_SPEED         100 // mm/s
-#define TURN_SPEED         100 // mm/s
+//#define MOVEMENT_ENABLED
+#define ATOMIC_TURN_AMOUNT  10 // FPS delay
+#define MOVE_SPEED         200 // mm/s
+#define TURN_SPEED         200 // mm/s
 
 
 
@@ -24,6 +24,7 @@ void turnRobot (Robot* robot, sint32_t direction)
     {
         alreadyTurning = 0;
         robot->setSpeed(0, 0);
+        robot->updateMap();
     }
     else if (!alreadyTurning && direction > 0)
     {
@@ -45,6 +46,7 @@ void moveRobot (Robot* robot, sint32_t direction)
     {
         alreadyMoving = 0;
         robot->setSpeed(0, 0);
+        robot->updateMap();
     }
     else if (!alreadyMoving && direction > 0)
     {
@@ -72,12 +74,16 @@ int main (void)
     sint8_t  panicStations = 0;
     int      retVal;
     // module objects
+#ifdef MOVEMENT_ENABLED
     Robot  reginald;
+#endif
     Vision vinny;
     TCPInterface tim(TCPSERVER, STREAMING_PORT_D);
     
+#ifdef MOVEMENT_ENABLED
     // set the robot to safe mode (allowing us to move).
     reginald.setMode(SAFE);
+#endif
     
     printf("starting camera loop...\n");
     while (1)
@@ -96,11 +102,16 @@ int main (void)
         
         // Robot behaviour
         // check panic situation
+        
         panicStations = vinny.shouldWePanic();
         if (panicStations > 0 && !turnCounter)
             turnCounter =  ATOMIC_TURN_AMOUNT;
         else if (panicStations < 0 && !turnCounter)
             turnCounter = -ATOMIC_TURN_AMOUNT;
+        
+#ifdef MOVEMENT_ENABLED
+        // check cliff sensors
+        //   done automatically in safe mode
         
         // check bumpers
         reginald.getBumperValues(bumperValues);
@@ -109,7 +120,7 @@ int main (void)
         else if (bumperValues[1] && !turnCounter)    // right bumper
             turnCounter = -ATOMIC_TURN_AMOUNT;
         
-#ifdef MOVEMENT_ENABLED
+        // move robot
         if (turnCounter == 0)
         {
             turnRobot(&reginald, 0);
@@ -128,7 +139,7 @@ int main (void)
 #endif
         
         // Print stats
-        printf("FPS=%.1f  \r", vinny.getFPS());
+        printf("FPS: %.1f \tpanicStations: %d \r", vinny.getFPS(), panicStations);
         fflush(stdout);
         
         // If there's a client connected send the depth data to them.
@@ -142,6 +153,7 @@ int main (void)
                 break;
         }
     }
+//    vinny.compressFrameToDisk("depthFrame.png");
     
     printf("Exitting.\n");
     

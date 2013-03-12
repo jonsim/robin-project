@@ -21,12 +21,6 @@
 #define HIST_NEAR_RANGE_END          600 // mm
 #define DIFFERENCE_THRESHOLD          30 // mm
 #define MEAN_SUBSAMPLING
-// values for full frame 640x480 res
-//#define HIST_STATIC_PANIC_THRESHOLD  180000 // this many readings in the near range will cause instant panic
-//#define HIST_DYNAMIC_PANIC_THRESHOLD  13000 // this many readings suddenly transitioning out of the near range will cause panic
-// values for half frame 640x480 res
-#define HIST_STATIC_PANIC_THRESHOLD  100000 // this many readings in the near range will cause instant panic
-#define HIST_DYNAMIC_PANIC_THRESHOLD  14000 // this many readings suddenly transitioning out of the near range will cause panic
 
 
 
@@ -69,13 +63,12 @@ public:
       resampling_factor(sampling_factor),
       pixel_size((PIXEL_SIZE * IMAGE_WIDTH * 2) / output_xres),
       projection_constant(pixel_size / FOCAL_LENGTH),
-      histogramNearRangeCount(0),
-      histogramErrorRangeCount(0),
       retention(frame_retention),
       lead_in_count(frame_retention),
       dataBuffer(frame_retention),   // TODO not because of the way I use the buffer the extra space which is supposed to be free isn't.
                                      // this is not a problem but means a frame_retention of < 2 is not possible. Also the pre-load would break.
-      histogramBuffer(frame_retention) // same problem as above
+      mLHistogramBuffer(frame_retention), // same problem as above
+      mRHistogramBuffer(frame_retention) // same problem as above
     {
         uint8_t i;
 
@@ -90,11 +83,15 @@ public:
             dataBuffer.add(&(rawDataBuffer[output_frame_res * i]));
 
         // Create the raw histogram buffer (which will hold histogram representations of every frame, again managed by a CircularBuffer).
-        rawHistogramBuffer = new Histogram[frame_retention];
+        mLHistogramBufferRaw = new Histogram[frame_retention];
+        mRHistogramBufferRaw = new Histogram[frame_retention];
 
         // pre-load the CircularBuffer.
         for (i = 0; i < frame_retention; i++)
-            histogramBuffer.add(&(rawHistogramBuffer[i]));
+        {
+            mLHistogramBuffer.add(&(mLHistogramBufferRaw[i]));
+            mRHistogramBuffer.add(&(mRHistogramBufferRaw[i]));
+        }
     }
     
     
@@ -167,10 +164,12 @@ public:
         }
 
         // build a histogram from the newly sampled data.
-        Histogram* hist = *(histogramBuffer.add());
-        hist->rebuild(frame, output_frame_res);
+        Histogram* leftHistogram  = *(mLHistogramBuffer.add());
+        Histogram* rightHistogram = *(mRHistogramBuffer.add());
+        leftHistogram->rebuildLeftHalf(  frame, output_xres, output_yres);
+        rightHistogram->rebuildRightHalf(frame, output_xres, output_yres);
 
-        // PANIC?!?!????!?!???!??!?!!!
+        /*// PANIC?!?!????!?!???!??!?!!!
         if (lead_in_count == 0)
         {
             uint32_t oldHistogramErrorRangeCount = histogramErrorRangeCount;
@@ -183,14 +182,12 @@ public:
                 printf("STATIC PANIC! :O\n");
 
             // check for dynamic panic threshold
-            /*if (histogramNearRangeCount > (oldHistogramNearRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD))
-                printf("DYNAMIC PANIC! :O\n");*/
             if (histogramNearRangeCount  < (oldHistogramNearRangeCount  - HIST_DYNAMIC_PANIC_THRESHOLD) &&
                 histogramErrorRangeCount > (oldHistogramErrorRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD)   )
             {
                 printf("DYNAMIC PANIC! :O\n");
             }
-        }
+        }*/
     }
     
     
@@ -211,6 +208,23 @@ public:
             return *(dataBuffer.get(frame_number));
         else
             return NULL;
+    }
+    
+    
+    void retrieveHistograms (const uint8_t frame_number, Histogram** leftHistogram, Histogram** rightHistogram)
+    {
+        if ((frame_number < retention) && (lead_in_count == 0))
+        {
+//            printf("doing one thing\n");
+            (*leftHistogram)  = *(mLHistogramBuffer.get(frame_number));
+            (*rightHistogram) = *(mRHistogramBuffer.get(frame_number));
+        }
+        else
+        {
+//            printf("doing something else (fn:%d, ret:%d, lic:%d)\n", frame_number, retention, lead_in_count);
+            (*leftHistogram)  = NULL;
+            (*rightHistogram) = NULL;
+        }
     }
     
     
@@ -465,9 +479,10 @@ private:
     uint8_t        lead_in_count;       ///< The number of frames that still need to be inserted before the FrameBuffer can be accessed.
     CircularBuffer<uint16_t*> dataBuffer;   ///< The circular buffer which 'wraps' the frame data, managing its storage.
     uint16_t*      rawDataBuffer;       ///< The raw array used to store the frame data.
-    CircularBuffer<Histogram*> histogramBuffer; ///< The circular buffer which 'wraps' the histogram data, managing its storage.
-    Histogram*     rawHistogramBuffer;  ///< The raw array used to store the histogram data.
-
+    CircularBuffer<Histogram*> mLHistogramBuffer; ///< The circular buffer which 'wraps' the histogram data, managing its storage.
+    CircularBuffer<Histogram*> mRHistogramBuffer; ///< The circular buffer which 'wraps' the histogram data, managing its storage.
+    Histogram*     mLHistogramBufferRaw;  ///< The raw array used to store the histogram data.
+    Histogram*     mRHistogramBufferRaw;  ///< The raw array used to store the histogram data.
 };
 
 #endif

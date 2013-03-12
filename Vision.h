@@ -24,6 +24,8 @@
 #include "Histogram.h"
 
 
+
+
 /*-------------------- DEFINES  --------------------*/
 #define VISION_XML_CONFIG_PATH       "CameraConfiguration.xml"
 #define VISION_XML_CONFIG_PATH_LOCAL "/home/jon/individual_project/CameraConfiguration.xml"
@@ -35,8 +37,31 @@
     #error "NO COLOUR STREAM PLESE :(... or write it yourself"
 #endif
 
-#define SUBSAMPLING_FACTOR             8
-#define FRAME_RETENTION                5
+// frame buffer stuff
+#define SUBSAMPLING_FACTOR  2
+#define FRAME_RETENTION     5
+
+// panic thresholding stuff
+// values for full frame 640x480 res
+//#define HIST_STATIC_PANIC_THRESHOLD  180000 // this many readings in the near range will cause instant panic
+//#define HIST_DYNAMIC_PANIC_THRESHOLD  13000 // this many readings suddenly transitioning out of the near range will cause panic
+// values for half frame 640x480 res
+//#define HIST_STATIC_PANIC_THRESHOLD  100000 // this many readings in the near range will cause instant panic
+//#define HIST_DYNAMIC_PANIC_THRESHOLD  14000 // this many readings suddenly transitioning out of the near range will cause panic
+// values for half frame 320x240 res
+//#define HIST_STATIC_PANIC_THRESHOLD  25000 // this many readings in the near range will cause instant panic
+//#define HIST_DYNAMIC_PANIC_THRESHOLD  3500 // this many readings suddenly transitioning out of the near range will cause panic
+// values for half frame 320x240 res with new ranges
+#define HIST_STATIC_PANIC_THRESHOLD  20000 // this many readings in the near range will cause instant panic
+#define HIST_DYNAMIC_PANIC_THRESHOLD  1000 // this many readings suddenly transitioning out of the near range will cause panic
+// panic ranges
+#define HIST_RANGE1_START 400   // range 1: 40 - 60cm
+#define HIST_RANGE1_END   599
+#define HIST_RANGE2_START 600   // range 2: 60 - 80cm
+#define HIST_RANGE2_END   799
+
+
+
 
 /*--------------------  MACROS  --------------------*/
 // None.
@@ -90,13 +115,13 @@ private:
     std::vector<uint8_t> mStreamingDepthJPEG;
     // Other image algorithm datas
 //    uint32_t        mDepthHistogram[MAX_DEPTH];
-    uint32_t        mLHistogramErrorRangeCount;
-    uint32_t        mLHistogramNearRangeCount;
-    uint32_t        mRHistogramErrorRangeCount;
-    uint32_t        mRHistogramNearRangeCount;
+//    uint32_t        mLHistogramErrorRangeCount;
+//    uint32_t        mLHistogramNearRangeCount;
+//    uint32_t        mRHistogramErrorRangeCount;
+//    uint32_t        mRHistogramNearRangeCount;
 //    Histogram       mHistogram;
-    Histogram       mLHistogram;
-    Histogram       mRHistogram;
+//    Histogram       mLHistogram;
+//    Histogram       mRHistogram;
 };
 
 #endif

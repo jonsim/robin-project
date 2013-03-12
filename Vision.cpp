@@ -3,13 +3,7 @@
 
 /// @brief  Constructor.
 Vision::Vision (void) : mFrameBuffer(IMAGE_WIDTH, IMAGE_HEIGHT, SUBSAMPLING_FACTOR, FRAME_RETENTION),
-                        mStreamingDepthRaw(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3),
-                        mLHistogramErrorRangeCount(0),
-                        mLHistogramNearRangeCount(0),
-                        mRHistogramErrorRangeCount(0),
-                        mRHistogramNearRangeCount(0),
-                        mLHistogram(),
-                        mRHistogram()
+                        mStreamingDepthRaw(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3)
 {
     loadCameraConfiguration();
     initialiseCamera();
@@ -107,12 +101,7 @@ void Vision::captureFrame (void)
     mDepthData = (const uint16_t*) mDepthMetaData.Data();
     
     // Pop this data into the frame buffer.
-//    mFrameBuffer.insert(mDepthData);
-    
-    // Build the histogram.
-//    mHistogram.rebuild(mDepthData, IMAGE_WIDTH*IMAGE_HEIGHT);
-    mLHistogram.rebuildLeftHalf(mDepthData, IMAGE_WIDTH, IMAGE_HEIGHT);
-    mRHistogram.rebuildRightHalf(mDepthData, IMAGE_WIDTH, IMAGE_HEIGHT);
+    mFrameBuffer.insert(mDepthData);
 }
 
 
@@ -136,6 +125,7 @@ const std::vector<uint8_t>* Vision::compressFrame (void)
 
 /// @brief  Compresses the currently saved depth frame (loaded from the captureFrame() method) to a
 ///         JPEG which resides in the mStreamingDataJPEG object variable.
+/// @param  filename    The name with which to save the frame. The extension may be jpg, png, ppm, pgm or pbm.
 void Vision::compressFrameToDisk (const char* filename)
 {
     static int paramsArray[] = {CV_IMWRITE_JPEG_QUALITY, COMPRESSION_QUALITY};
@@ -145,7 +135,11 @@ void Vision::compressFrameToDisk (const char* filename)
     createColourDepthImage(&mStreamingDepthRaw, mDepthData);
     
     // Compress it to a JPEG
-    cv::imwrite(filename, mStreamingDepthRaw, paramsVector);
+    int fnl = strlen(filename);
+    if (filename[fnl-3]=='j' && filename[fnl-2]=='p' && filename[fnl-1]=='g')
+        cv::imwrite(filename, mStreamingDepthRaw, paramsVector);
+    else
+        cv::imwrite(filename, mStreamingDepthRaw);
     
     // Stream it
     //retVal = write(clientSocketD, &(mStreamingDepthJPEG.size()), 4);
@@ -172,55 +166,55 @@ float Vision::getFPS (void)
 ///         in the case that there is something scary on both sides a value of 2 will be returned.
 sint8_t Vision::shouldWePanic (void)
 {
-    sint8_t r = 0;
-    // save the old values
-    uint32_t oldLHistogramErrorRangeCount = mLHistogramErrorRangeCount;
-    uint32_t oldLHistogramNearRangeCount  = mLHistogramNearRangeCount;
-    uint32_t oldRHistogramErrorRangeCount = mRHistogramErrorRangeCount;
-    uint32_t oldRHistogramNearRangeCount  = mRHistogramNearRangeCount;
+    Histogram* newLHistogram;
+    Histogram* newRHistogram;
+    Histogram* oldLHistogram;
+    Histogram* oldRHistogram;
+    uint32_t   newLHistogramRange1, newLHistogramRange2, newLHistogramError;
+    uint32_t   newRHistogramRange1, newRHistogramRange2, newRHistogramError;
+    uint32_t   oldLHistogramRange1, oldLHistogramRange2;
+    uint32_t   oldRHistogramRange1, oldRHistogramRange2;
+    sint8_t    obstacleDetected = 0;
     
-    // update to the new values
-    mLHistogramErrorRangeCount = mLHistogram.get(0);
-    mLHistogramNearRangeCount  = mLHistogram.getRange(HIST_NEAR_RANGE_START, HIST_NEAR_RANGE_END);
-    mRHistogramErrorRangeCount = mRHistogram.get(0);
-    mRHistogramNearRangeCount  = mRHistogram.getRange(HIST_NEAR_RANGE_START, HIST_NEAR_RANGE_END);
+    // fill the histogram pointers appropriately.
+    mFrameBuffer.retrieveHistograms(0,                 &newLHistogram, &newRHistogram);
+    mFrameBuffer.retrieveHistograms(FRAME_RETENTION-1, &oldLHistogram, &oldRHistogram);
     
-    // check we're initialised. if we're not return no panic.
-    if (mLHistogramErrorRangeCount == 0)
+    // check we're all properly initialised
+    if (newLHistogram == NULL || newRHistogram == NULL || oldLHistogram == NULL || oldRHistogram == NULL)
         return 0;
     
-    // look right for scary shit
-    // check for static panic threshold
-    if (mRHistogramErrorRangeCount > HIST_STATIC_PANIC_THRESHOLD)
-    {
-        printf("PANIC RIGHT (static)\n");
-        r = 1;
-    }
-    // check for dynamic panic threshold
-    if ((mRHistogramNearRangeCount  < (oldRHistogramNearRangeCount  - HIST_DYNAMIC_PANIC_THRESHOLD)) &&
-        (mRHistogramErrorRangeCount > (oldRHistogramErrorRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD))   )
-    {
-        printf("PANIC RIGHT (dynamic)\n");
-        r = 1;
-    }
+    // retrieve the ranges
+    newLHistogramError  = newLHistogram->get(0);
+    newRHistogramError  = newRHistogram->get(0);
+    newLHistogramRange1 = newLHistogram->getRange(HIST_RANGE1_START, HIST_RANGE1_END);
+    newLHistogramRange2 = newLHistogram->getRange(HIST_RANGE2_START, HIST_RANGE2_END);
+    newRHistogramRange1 = newRHistogram->getRange(HIST_RANGE1_START, HIST_RANGE1_END);
+    newRHistogramRange2 = newRHistogram->getRange(HIST_RANGE2_START, HIST_RANGE2_END);
+    oldLHistogramRange1 = oldLHistogram->getRange(HIST_RANGE1_START, HIST_RANGE1_END);
+    oldLHistogramRange2 = oldLHistogram->getRange(HIST_RANGE2_START, HIST_RANGE2_END);
+    oldRHistogramRange1 = oldRHistogram->getRange(HIST_RANGE1_START, HIST_RANGE1_END);
+    oldRHistogramRange2 = oldRHistogram->getRange(HIST_RANGE2_START, HIST_RANGE2_END);
     
-    // look left for scary shit
-    // check for static panic threshold
-    if (mLHistogramErrorRangeCount > HIST_STATIC_PANIC_THRESHOLD)
-    {
-        printf("PANIC LEFT (static)\n");
-        r = (r == 1) ? 2 : -1;
-    }
-    // check for dynamic panic threshold
-    if ((mLHistogramNearRangeCount  < (oldLHistogramNearRangeCount  - HIST_DYNAMIC_PANIC_THRESHOLD)) &&
-        (mLHistogramErrorRangeCount > (oldLHistogramErrorRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD))   )
-    {
-        printf("PANIC LEFT (dynamic)\n");
-        r = (r == 1) ? 2 : -1;
-    }
+    // STATIC THREAT DETECTION
+    if (newLHistogramError > HIST_STATIC_PANIC_THRESHOLD)   // left
+        obstacleDetected = -1;
+    if (newRHistogramError > HIST_STATIC_PANIC_THRESHOLD)   // right
+        obstacleDetected = (obstacleDetected == -1) ? 2 :  1;
     
-    // return
-    return r;
+    // DYNAMIC THREAT DETECTION
+/*    printf("nL: %d,%d. oL: %d,%d. nR: %d,%d. oR: %d,%d.\n", newLHistogramRange1, newLHistogramRange2,
+                                                            oldLHistogramRange1, oldLHistogramRange2, 
+                                                            newRHistogramRange1, newRHistogramRange2,
+                                                            oldRHistogramRange1, oldRHistogramRange2 );*/
+    if ((newLHistogramRange2 < (oldLHistogramRange2 - HIST_DYNAMIC_PANIC_THRESHOLD)) &&     // left
+        (newLHistogramRange1 > (oldLHistogramRange1 + HIST_DYNAMIC_PANIC_THRESHOLD))    )
+        obstacleDetected = (obstacleDetected ==  1) ? 2 : -1;
+    if ((newRHistogramRange2 < (oldRHistogramRange2 - HIST_DYNAMIC_PANIC_THRESHOLD)) &&     // right
+        (newRHistogramRange1 > (oldRHistogramRange1 + HIST_DYNAMIC_PANIC_THRESHOLD))    )
+        obstacleDetected = (obstacleDetected == -1) ? 2 :  1;
+    
+    return obstacleDetected;
 }
 
 /*void Vision::buildDepthHistogram (void)
