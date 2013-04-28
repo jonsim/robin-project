@@ -81,7 +81,7 @@ public:
             mHist[MIN(data[one_step_index], mMaxValue)]++;
     }
     
-    void rebuildLeftHalf (const uint16_t* data, const uint16_t xres, const uint16_t yres)
+    void rebuildLeftHalf  (const uint16_t* data, const uint16_t xres, const uint16_t yres)
     {
         uint16_t x, y;
         uint16_t half_xres = xres/2;

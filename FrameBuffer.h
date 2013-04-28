@@ -20,7 +20,7 @@
 #define HIST_NEAR_RANGE_START        400 // mm
 #define HIST_NEAR_RANGE_END          600 // mm
 #define DIFFERENCE_THRESHOLD          30 // mm
-#define MEAN_SUBSAMPLING
+//#define MEAN_SUBSAMPLING
 
 
 
@@ -98,6 +98,8 @@ public:
     /// @brief  Deconstructor.
     ~FrameBuffer (void)
     {
+        free(mRHistogramBufferRaw);
+        free(mLHistogramBufferRaw);
         free(rawDataBuffer);
     }
     
@@ -162,6 +164,7 @@ public:
 #endif
             }
         }
+        
 
         // build a histogram from the newly sampled data.
         Histogram* leftHistogram  = *(mLHistogramBuffer.add());

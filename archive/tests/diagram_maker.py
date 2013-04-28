@@ -149,6 +149,17 @@ def make_histogram (data2d, side='both'):
     for i in range(0, 10000):
         colours.append(convert_depth_to_rgb(i))
     
+    # print the histogram's stats
+    hist_range1 = 0
+    for i in range(600, 900):
+        hist_range1 += hist[i]
+    hist_range2 = 0
+    for i in range(900, 1200):
+        hist_range2 += hist[i]
+    print "hist[0] =", hist[0]
+    print "hist[600-899]  =", hist_range1
+    print "hist[900-1199] =", hist_range2
+    
     # tidy up the histogram
     histy = hist.tolist()
     histx = range(0, 10000)
@@ -279,4 +290,10 @@ print "Plotting histogram..."
 plot_histogram(ax, histogram)
 setup_plot_labels(ax)
 
-plt.show()
+print "Outputting histogram..."
+# show stuff
+#plt.show()
+# save stuff
+output_filename = filename.split('.')[0] + "_hist_" + side
+plt.savefig(output_filename + ".svg")
+plt.savefig(output_filename + ".png")

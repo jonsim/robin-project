@@ -3,7 +3,12 @@
 
 /// @brief  Constructor.
 Vision::Vision (void) : mFrameBuffer(IMAGE_WIDTH, IMAGE_HEIGHT, SUBSAMPLING_FACTOR, FRAME_RETENTION),
-                        mStreamingDepthRaw(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3)
+#ifdef DEPTH_COLORED
+                        mDepthImage(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3),
+#else
+                        mDepthImage(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC1),
+#endif
+                        mColorImage(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3)
 {
     loadCameraConfiguration();
     initialiseCamera();
@@ -62,12 +67,18 @@ void Vision::initialiseCamera (void)
     // initialise and validate main variables
     printf("Initialising camera components... ");
     fflush(stdout);
+    
+#ifdef DEPTH_STREAM
     retVal = mContext.FindExistingNode(XN_NODE_TYPE_DEPTH, mDepthGenerator);
     CHECK_RETURN_XN(retVal, "Find depth generator");
-//    retVal = mContext.FindExistingNode(XN_NODE_TYPE_IMAGE, mColorGenerator);
-//    CHECK_RETURN_XN(retVal, "Find image generator");
+#endif
+#ifdef COLOR_STREAM
+    retVal = mContext.FindExistingNode(XN_NODE_TYPE_IMAGE, mColorGenerator);
+    CHECK_RETURN_XN(retVal, "Find color generator");
+#endif
     retVal = xnFPSInit(&mXnFPS, 180);
     CHECK_RETURN_XN(retVal, "FPS Init");
+    
     printf("done.\n");
 }
 
@@ -75,8 +86,12 @@ void Vision::initialiseCamera (void)
 /// @brief  Shuts down the camera, releasing all objects associated with it.
 void Vision::shutdownCamera (void)
 {
+#ifdef DEPTH_STREAM
     mDepthGenerator.Release();
-    //mColorGenerator.Release();
+#endif
+#ifdef COLOR_STREAM
+    mColorGenerator.Release();
+#endif
     mScriptNode.Release();
     mContext.Release();
 }
@@ -97,49 +112,74 @@ void Vision::captureFrame (void)
     }
 
     // Read the data into our containers.
+#ifdef DEPTH_STREAM
     mDepthGenerator.GetMetaData(mDepthMetaData);
     mDepthData = (const uint16_t*) mDepthMetaData.Data();
+#endif
+#ifdef COLOR_STREAM
+    mColorGenerator.GetMetaData(mColorMetaData);
+    mColorData = (const uint8_t*) mColorMetaData.Data();
+#endif
     
     // Pop this data into the frame buffer.
     mFrameBuffer.insert(mDepthData);
 }
 
 
+void Vision::compressDepthFrame (void)
+{
+#ifdef DEPTH_STREAM
+    createDepthImage(&mDepthImage, mDepthData);
+    compressFrame(&mDepthImage);
+#else
+    printf("Tried to compress depth stream when no stream was present.\n");
+#endif
+}
+
+
+void Vision::compressColorFrame (void)
+{
+#ifdef COLOR_STREAM
+    createColorImage(&mColorImage, mColorData);
+    compressFrame(&mColorImage);
+#else
+    printf("Tried to compress color stream when no stream was present.\n");
+#endif
+}
+
+
 /// @brief  Compresses the currently saved depth frame (loaded from the captureFrame() method) to a
 ///         JPEG which resides in the mStreamingDataJPEG object variable.
-const std::vector<uint8_t>* Vision::compressFrame (void)
+void Vision::compressFrame (cv::Mat* frame)
 {
     static int paramsArray[] = {CV_IMWRITE_JPEG_QUALITY, COMPRESSION_QUALITY};
     static std::vector<int> paramsVector(paramsArray, paramsArray + sizeof(paramsArray) / sizeof(int));
     
     // Produce a human-viewable colour representation of the depth data.
-    createColourDepthImage(&mStreamingDepthRaw, mDepthData);
+//    createColourDepthImage(&mStreamingDepthRaw, mDepthData);
     
     // Compress it to a JPEG.
-    cv::imencode(".JPEG", mStreamingDepthRaw, mStreamingDepthJPEG, paramsVector);
-    
-    // Return it.
-    return &mStreamingDepthJPEG;
+    cv::imencode(".JPEG", *frame, mStreamBuffer, paramsVector);
 }
 
 
 /// @brief  Compresses the currently saved depth frame (loaded from the captureFrame() method) to a
 ///         JPEG which resides in the mStreamingDataJPEG object variable.
 /// @param  filename    The name with which to save the frame. The extension may be jpg, png, ppm, pgm or pbm.
-void Vision::compressFrameToDisk (const char* filename)
+void Vision::compressFrameToDisk (cv::Mat* frame, const char* filename)
 {
     static int paramsArray[] = {CV_IMWRITE_JPEG_QUALITY, COMPRESSION_QUALITY};
     static std::vector<int> paramsVector(paramsArray, paramsArray + sizeof(paramsArray) / sizeof(int));
     
     // Produce a human-viewable colour representation of the depth data
-    createColourDepthImage(&mStreamingDepthRaw, mDepthData);
+    //createColourDepthImage(&mStreamingDepthRaw, mDepthData);
     
     // Compress it to a JPEG
     int fnl = strlen(filename);
     if (filename[fnl-3]=='j' && filename[fnl-2]=='p' && filename[fnl-1]=='g')
-        cv::imwrite(filename, mStreamingDepthRaw, paramsVector);
+        cv::imwrite(filename, *frame, paramsVector);
     else
-        cv::imwrite(filename, mStreamingDepthRaw);
+        cv::imwrite(filename, *frame);
     
     // Stream it
     //retVal = write(clientSocketD, &(mStreamingDepthJPEG.size()), 4);
@@ -246,8 +286,9 @@ uint32_t Vision::queryDepthHistogram (uint16_t v)
 ///               in the CV_8UC3 mode (8 bit RGB).
 /// @param  src   A pointer to the uint16_t array of depth data. The size of this is defined by the
 ///               IMAGE_HEIGHT and IMAGE_WIDTH values.
-void Vision::createColourDepthImage (cv::Mat* dst, const uint16_t* src)
+void Vision::createDepthImage (cv::Mat* dst, const uint16_t* src)
 {
+#ifdef DEPTH_COLORED
     static const float scaling_factor = 4800/1530;
     uint16_t x=0, y=0;
     uint32_t one_step_offset=0, three_step_offset=0;
@@ -323,6 +364,30 @@ void Vision::createColourDepthImage (cv::Mat* dst, const uint16_t* src)
             loc[2] = r;
         }
     }
+#else
+    static const float scaling_factor = 10000/255;
+    uint16_t x=0, y=0;
+    uint32_t one_step_offset=0;
+    
+    for (y=0, one_step_offset=0; y < IMAGE_HEIGHT; y++)
+    {
+        for (x = 0; x < IMAGE_WIDTH; x++, one_step_offset++)
+        {
+            dst->data[one_step_offset] = (uint16_t) (src[one_step_offset] * scaling_factor);
+        }
+    }
+#endif
+}
+
+
+/// @brief  TBD
+void Vision::createColorImage (cv::Mat* dst, const uint8_t* src)
+{
+    uint32_t i=0;
+    
+    for (i=0; i < IMAGE_HEIGHT * IMAGE_WIDTH * 3; i++)
+        dst->data[i] = (uint8_t) src[i];
+    cv::cvtColor(*dst, *dst, CV_RGB2BGR);
 }
 
 

@@ -70,12 +70,12 @@ int main (void)
     // function variables
     bool_t   clientConnected = false;
     sint32_t turnCounter = 0;
-    uint8_t  bumperValues[2];
     sint8_t  panicStations = 0;
     int      retVal;
     // module objects
 #ifdef MOVEMENT_ENABLED
-    Robot  reginald;
+    Robot    reginald;
+    uint8_t  bumperValues[2];
 #endif
     Vision vinny;
     TCPInterface tim(TCPSERVER, STREAMING_PORT_D);
@@ -145,10 +145,11 @@ int main (void)
         // If there's a client connected send the depth data to them.
         if (clientConnected)
         {
-            const std::vector<uint8_t>* streamBuffer = vinny.compressFrame();
-            uint32_t frameSize = (uint32_t) streamBuffer->size();
+            //vinny.compressDepthFrame();
+            vinny.compressColorFrame();
+            uint32_t frameSize = (uint32_t) vinny.mStreamBuffer.size();
             retVal = tim.writeBytes(&frameSize, 4);
-            retVal = tim.writeBytes(&(streamBuffer->front()), frameSize);
+            retVal = tim.writeBytes(&(vinny.mStreamBuffer.front()), frameSize);
             if (retVal < 0)
                 break;
         }

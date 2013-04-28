@@ -12,6 +12,11 @@
 *.la
 *.a
 
+# images
+*.pdf
+*.svg
+*.png
+
 # Project specific files
 Release/*
 archive/initial_code_host/ProcessFrame
