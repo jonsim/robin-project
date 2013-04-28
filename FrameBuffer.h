@@ -17,10 +17,9 @@
 
 
 /*-------------------- DEFINES --------------------*/
-#define HIST_NEAR_RANGE_START        400 // mm
-#define HIST_NEAR_RANGE_END          600 // mm
 #define DIFFERENCE_THRESHOLD          30 // mm
 //#define MEAN_SUBSAMPLING
+//#define DATA_BUFFERING_ENABLED
 
 
 
@@ -55,36 +54,40 @@ public:
     FrameBuffer  (const uint16_t xres, const uint16_t yres, const uint16_t sampling_factor, const uint8_t frame_retention) :
       output_xres(xres / sampling_factor),
       output_yres(yres / sampling_factor),
-      output_frame_res(output_xres * output_yres),
-      subtractionBuffer(output_frame_res),
+      output_fres(output_xres * output_yres),
+      subtractionBuffer(output_fres),
       input_xres(xres),
       input_yres(yres),
-      input_frame_res(input_xres * input_yres),
+      input_fres(input_xres * input_yres),
       resampling_factor(sampling_factor),
       pixel_size((PIXEL_SIZE * IMAGE_WIDTH * 2) / output_xres),
       projection_constant(pixel_size / FOCAL_LENGTH),
       retention(frame_retention),
       lead_in_count(frame_retention),
+#ifdef DATA_BUFFERING_ENABLED
       dataBuffer(frame_retention),   // TODO not because of the way I use the buffer the extra space which is supposed to be free isn't.
                                      // this is not a problem but means a frame_retention of < 2 is not possible. Also the pre-load would break.
+#endif
       mLHistogramBuffer(frame_retention), // same problem as above
       mRHistogramBuffer(frame_retention) // same problem as above
     {
         uint8_t i;
 
+#ifdef DATA_BUFFERING_ENABLED
         // Create the raw data buffer (which will hold the raw frame data, managed by a CircularBuffer of pointers).
-        rawDataBuffer = (uint16_t*) malloc(sizeof(uint16_t) * output_frame_res * frame_retention);
+        rawDataBuffer = (uint16_t*) malloc(sizeof(uint16_t) * output_fres * retention);
         if (rawDataBuffer == NULL)
             printf("Couldn't allocate FrameBuffer rawDataBuffer memory\n");
         
         // pre-load buffer. this will just have gibberish in for the first frame_retention frames, hence the
         // use of a lead_in_count variable to refuse all access requests before then.
         for (i = 0; i < frame_retention; i++)
-            dataBuffer.add(&(rawDataBuffer[output_frame_res * i]));
+            dataBuffer.add(&(rawDataBuffer[output_fres * i]));
+#endif
 
         // Create the raw histogram buffer (which will hold histogram representations of every frame, again managed by a CircularBuffer).
-        mLHistogramBufferRaw = new Histogram[frame_retention];
-        mRHistogramBufferRaw = new Histogram[frame_retention];
+        mLHistogramBufferRaw = new Histogram[retention];
+        mRHistogramBufferRaw = new Histogram[retention];
 
         // pre-load the CircularBuffer.
         for (i = 0; i < frame_retention; i++)
@@ -98,9 +101,11 @@ public:
     /// @brief  Deconstructor.
     ~FrameBuffer (void)
     {
-        free(mRHistogramBufferRaw);
-        free(mLHistogramBufferRaw);
+        delete[] mRHistogramBufferRaw;
+        delete[] mLHistogramBufferRaw;
+#ifdef DATA_BUFFERING_ENABLED
         free(rawDataBuffer);
+#endif
     }
     
     
@@ -124,22 +129,25 @@ public:
     /// @param  data    The data to insert into the frame buffer.
     void insert (const uint16_t* data)
     {
+#ifdef DATA_BUFFERING_ENABLED
         uint16_t data_x, data_y;
         uint32_t one_step_index, sample_step_index;
-
-        // rotate the buffer round one step
-        uint16_t* frame = *(dataBuffer.add());
+#endif
 
         // if we're still warming up, decrement the counter
         if (lead_in_count > 0)
             lead_in_count--;
+            
+#ifdef DATA_BUFFERING_ENABLED
+        // rotate the buffer round one step
+        uint16_t* frame = *(dataBuffer.add());
 
         // copy the data into the frame buffer, sampling every sampling_factor pixels. this will overwrite whatever's in the buffer already.
         for (one_step_index=0, sample_step_index=0, data_y=0; data_y < input_yres; data_y+=resampling_factor, sample_step_index=(data_y*input_xres))
         {
             for (                                   data_x=0; data_x < input_xres; data_x+=resampling_factor, sample_step_index+=resampling_factor, one_step_index++)
             {
-#ifdef MEAN_SUBSAMPLING
+    #ifdef MEAN_SUBSAMPLING
                 uint32_t pixel_sum   = 0;
                 uint16_t pixel_count = 0;
                 uint16_t pixel_value = 0;
@@ -159,38 +167,25 @@ public:
                     frame[one_step_index] = 0;
                 else
                     frame[one_step_index] = pixel_sum / pixel_count;
-#else               
+    #else               
                 frame[one_step_index] = data[sample_step_index];
-#endif
+    #endif
             }
         }
+#endif
         
 
         // build a histogram from the newly sampled data.
         Histogram* leftHistogram  = *(mLHistogramBuffer.add());
         Histogram* rightHistogram = *(mRHistogramBuffer.add());
+#ifdef DATA_BUFFERING_ENABLED
         leftHistogram->rebuildLeftHalf(  frame, output_xres, output_yres);
         rightHistogram->rebuildRightHalf(frame, output_xres, output_yres);
-
-        /*// PANIC?!?!????!?!???!??!?!!!
-        if (lead_in_count == 0)
-        {
-            uint32_t oldHistogramErrorRangeCount = histogramErrorRangeCount;
-            uint32_t oldHistogramNearRangeCount  = histogramNearRangeCount;
-            histogramErrorRangeCount = hist->get(0);
-            histogramNearRangeCount  = hist->getRange(HIST_NEAR_RANGE_START, HIST_NEAR_RANGE_END);
-
-            // check for static panic threshold
-            if (histogramNearRangeCount > HIST_STATIC_PANIC_THRESHOLD)
-                printf("STATIC PANIC! :O\n");
-
-            // check for dynamic panic threshold
-            if (histogramNearRangeCount  < (oldHistogramNearRangeCount  - HIST_DYNAMIC_PANIC_THRESHOLD) &&
-                histogramErrorRangeCount > (oldHistogramErrorRangeCount + HIST_DYNAMIC_PANIC_THRESHOLD)   )
-            {
-                printf("DYNAMIC PANIC! :O\n");
-            }
-        }*/
+#else
+        // TODO if data buffering is disabled we actually ignore the subsampling parameters...
+        leftHistogram->rebuildLeftHalf(  data, output_xres, output_yres);
+        rightHistogram->rebuildRightHalf(data, output_xres, output_yres);
+#endif
     }
     
     
@@ -205,12 +200,13 @@ public:
     ///         NULL can be returned if frame number is not in the range 0 <= frame_number < frame_retention.
     ///         NULL can also be returned if the FrameBuffer is not yet warmed up (i.e. it hasn't had
     ///         frame_retention insertions. The caller MUST check for NULL returns.
-    uint16_t* retrieve (const uint8_t frame_number) const
+    uint16_t* retrieveData (const uint8_t frame_number) const
     {
+#ifdef DATA_BUFFERING_ENABLED
         if ((frame_number < retention) && (lead_in_count == 0))
             return *(dataBuffer.get(frame_number));
-        else
-            return NULL;
+#endif
+        return NULL;
     }
     
     
@@ -245,13 +241,13 @@ public:
     {
         sint32_t  difference;
         uint32_t  one_step_index;
-        uint16_t* frame1 = retrieve(frame_number1);
-        uint16_t* frame2 = retrieve(frame_number2);
+        uint16_t* frame1 = retrieveData(frame_number1);
+        uint16_t* frame2 = retrieveData(frame_number2);
 
         if (frame1 == NULL || frame2 == NULL)
             return;
 
-        for (one_step_index = 0; one_step_index < output_frame_res; one_step_index++)
+        for (one_step_index = 0; one_step_index < output_fres; one_step_index++)
         {
             difference = ((sint32_t) frame1[one_step_index]) - ((sint32_t) frame2[one_step_index]);
             if (abs(difference) > DIFFERENCE_THRESHOLD)
@@ -275,13 +271,13 @@ public:
     {
         sint32_t  difference;
         uint32_t  one_step_index;
-        uint16_t* frame1 = retrieve(frame_number1);
-        uint16_t* frame2 = retrieve(frame_number2);
+        uint16_t* frame1 = retrieveData(frame_number1);
+        uint16_t* frame2 = retrieveData(frame_number2);
 
         if (frame1 == NULL || frame2 == NULL)
             return;
 
-        for (one_step_index = 0; one_step_index < output_frame_res; one_step_index++)
+        for (one_step_index = 0; one_step_index < output_fres; one_step_index++)
         {
             difference = ((sint32_t) frame1[one_step_index]) - ((sint32_t) frame2[one_step_index]);
             if (abs(difference) > DIFFERENCE_THRESHOLD)
@@ -317,11 +313,11 @@ public:
             for (xi = 0; xi < output_xres; xi++, one_step_index++)
             {
                 Z = frame[one_step_index];
-#ifdef FULL_3D_PROJECTION
+    #ifdef FULL_3D_PROJECTION
                 Z_projection_constant = Z * projection_constant;
-#else
+    #else
                 Z_projection_constant = 20;
-#endif
+    #endif
                 X = (xi - half_xres) * Z_projection_constant;
                 Y = (half_yres - yi) * Z_projection_constant;
                 x->push_back(X);
@@ -361,11 +357,11 @@ public:
                 if (subtractionBuffer.get(one_step_index))
                 {
                     Z = frame[one_step_index];
-#ifdef FULL_3D_PROJECTION
+    #ifdef FULL_3D_PROJECTION
                     Z_projection_constant = Z * projection_constant;
-#else
+    #else
                     Z_projection_constant = 20;
-#endif
+    #endif
                     X = (xi - half_xres) * Z_projection_constant;
                     Y = (half_yres - yi) * Z_projection_constant;
                     x->push_back(X);
@@ -391,7 +387,7 @@ public:
     {
         const static uint16_t half_xres = output_xres/2;
         const static uint16_t half_yres = output_yres/2;
-        uint16_t* frame = retrieve(frame_number);
+        uint16_t* frame = retrieveData(frame_number);
 
         // TODO this entire function can be heavily optimised
         uint16_t p1_Z = frame[p1.x + (p1.y * output_xres)];
@@ -433,7 +429,7 @@ public:
     {
         const static uint16_t half_xres = output_xres/2;
         const static uint16_t half_yres = output_yres/2;
-        uint16_t* frame = retrieve(frame_number);
+        uint16_t* frame = retrieveData(frame_number);
 
         // TODO this entire function can be heavily optimised
         uint16_t p1_Z = frame[p1.x + (p1.y * output_xres)];
@@ -464,13 +460,13 @@ public:
     
     const uint16_t output_xres;         ///< The x-resolution of the stored (or 'output') frames.
     const uint16_t output_yres;         ///< The y-resolution of the stored (or 'output') frames.
-    const uint32_t output_frame_res;    ///< The number of pixels (x * y resolutions) of the stored (or 'output') frames.
+    const uint32_t output_fres;         ///< The number of pixels (x * y resolutions) of the stored (or 'output') frames.
     BinaryMarker subtractionBuffer;     ///< The subtraction buffer which is used to hold a threhsolded distance value between pixels.
 
 private:
     const uint16_t input_xres;          ///< The x-resolution of the data passed into the buffer (or 'input' frames).
     const uint16_t input_yres;          ///< The y-resolution of the data passed into the buffer (or 'input' frames).
-    const uint32_t input_frame_res;     ///< The number of pixels (x * y resolution) of the data passed into the buffer (or 'input' frames).
+    const uint32_t input_fres;          ///< The number of pixels (x * y resolution) of the data passed into the buffer (or 'input' frames).
     const uint16_t resampling_factor;   ///< The number of pixels considered for sub-sampling from the 'input' to the 'output' frames.
     const float    pixel_size;          ///< The physical size of a pixel at the zero plane. Assumes square (cube) pixels.
     const float    projection_constant; ///< pixel_size / focal_length.
@@ -480,8 +476,10 @@ private:
 
     const uint8_t  retention;           ///< The frame retention.
     uint8_t        lead_in_count;       ///< The number of frames that still need to be inserted before the FrameBuffer can be accessed.
+#ifdef DATA_BUFFERING_ENABLED
     CircularBuffer<uint16_t*> dataBuffer;   ///< The circular buffer which 'wraps' the frame data, managing its storage.
     uint16_t*      rawDataBuffer;       ///< The raw array used to store the frame data.
+#endif
     CircularBuffer<Histogram*> mLHistogramBuffer; ///< The circular buffer which 'wraps' the histogram data, managing its storage.
     CircularBuffer<Histogram*> mRHistogramBuffer; ///< The circular buffer which 'wraps' the histogram data, managing its storage.
     Histogram*     mLHistogramBufferRaw;  ///< The raw array used to store the histogram data.

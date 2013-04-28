@@ -3,12 +3,16 @@
 
 /// @brief  Constructor.
 Vision::Vision (void) : mFrameBuffer(IMAGE_WIDTH, IMAGE_HEIGHT, SUBSAMPLING_FACTOR, FRAME_RETENTION),
-#ifdef DEPTH_COLORED
-                        mDepthImage(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3),
-#else
-                        mDepthImage(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC1),
+#ifdef DEPTH_STREAMING_ENABLED
+    #ifdef DEPTH_COLORED
+                        mDepthStreamingFrame(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3),
+    #else
+                        mDepthStreamingFrame(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC1),
+    #endif
 #endif
-                        mColorImage(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3)
+#ifdef COLOR_STREAM
+                        mColorFrame(IMAGE_HEIGHT, IMAGE_WIDTH, CV_8UC3)
+#endif
 {
     loadCameraConfiguration();
     initialiseCamera();
@@ -115,10 +119,13 @@ void Vision::captureFrame (void)
 #ifdef DEPTH_STREAM
     mDepthGenerator.GetMetaData(mDepthMetaData);
     mDepthData = (const uint16_t*) mDepthMetaData.Data();
+    mDepthFrame = cv::Mat(IMAGE_HEIGHT, IMAGE_WIDTH, CV_16UC1, (uint16_t*) mDepthData);
 #endif
 #ifdef COLOR_STREAM
     mColorGenerator.GetMetaData(mColorMetaData);
     mColorData = (const uint8_t*) mColorMetaData.Data();
+    memcpy(mColorFrame.data, mColorData, IMAGE_HEIGHT * IMAGE_WIDTH * 3);
+    cv::cvtColor(mColorFrame, mColorFrame, CV_RGB2BGR);
 #endif
     
     // Pop this data into the frame buffer.
@@ -128,9 +135,9 @@ void Vision::captureFrame (void)
 
 void Vision::compressDepthFrame (void)
 {
-#ifdef DEPTH_STREAM
-    createDepthImage(&mDepthImage, mDepthData);
-    compressFrame(&mDepthImage);
+#if defined(DEPTH_STREAM) && defined(DEPTH_STREAMING_ENABLED)
+    createDepthImage(&mDepthStreamingFrame, mDepthData);
+    compressFrame(&mDepthStreamingFrame);
 #else
     printf("Tried to compress depth stream when no stream was present.\n");
 #endif
@@ -139,9 +146,9 @@ void Vision::compressDepthFrame (void)
 
 void Vision::compressColorFrame (void)
 {
-#ifdef COLOR_STREAM
-    createColorImage(&mColorImage, mColorData);
-    compressFrame(&mColorImage);
+#if defined(COLOR_STREAM) && defined(COLOR_STREAMING_ENABLED)
+//    createColorImage(&mColorImage, mColorData);
+    compressFrame(&mColorFrame);
 #else
     printf("Tried to compress color stream when no stream was present.\n");
 #endif
@@ -154,9 +161,6 @@ void Vision::compressFrame (cv::Mat* frame)
 {
     static int paramsArray[] = {CV_IMWRITE_JPEG_QUALITY, COMPRESSION_QUALITY};
     static std::vector<int> paramsVector(paramsArray, paramsArray + sizeof(paramsArray) / sizeof(int));
-    
-    // Produce a human-viewable colour representation of the depth data.
-//    createColourDepthImage(&mStreamingDepthRaw, mDepthData);
     
     // Compress it to a JPEG.
     cv::imencode(".JPEG", *frame, mStreamBuffer, paramsVector);
@@ -180,12 +184,6 @@ void Vision::compressFrameToDisk (cv::Mat* frame, const char* filename)
         cv::imwrite(filename, *frame, paramsVector);
     else
         cv::imwrite(filename, *frame);
-    
-    // Stream it
-    //retVal = write(clientSocketD, &(mStreamingDepthJPEG.size()), 4);
-    //CHECK_RETURN(retVal, "streamFrame socket write");
-    //retVal = write(clientSocketD, &(mStreamingDepthJPEG.front()), mStreamingDepthJPEG.size());
-    //CHECK_RETURN(retVal, "streamFrame socket write");
 }
 
 
@@ -204,7 +202,7 @@ float Vision::getFPS (void)
 ///         of 0 suggests we're all cool, a return of 1 means there is legit grounds for panic on
 ///         the right hand side and a return of -1 means we need to worry about something on our left.
 ///         in the case that there is something scary on both sides a value of 2 will be returned.
-sint8_t Vision::shouldWePanic (void)
+sint8_t Vision::checkForObstacles (void)
 {
     Histogram* newLHistogram;
     Histogram* newRHistogram;
@@ -227,19 +225,19 @@ sint8_t Vision::shouldWePanic (void)
     // retrieve the ranges
     newLHistogramError  = newLHistogram->get(0);
     newRHistogramError  = newRHistogram->get(0);
-    newLHistogramRange1 = newLHistogram->getRange(HIST_RANGE1_START, HIST_RANGE1_END);
-    newLHistogramRange2 = newLHistogram->getRange(HIST_RANGE2_START, HIST_RANGE2_END);
-    newRHistogramRange1 = newRHistogram->getRange(HIST_RANGE1_START, HIST_RANGE1_END);
-    newRHistogramRange2 = newRHistogram->getRange(HIST_RANGE2_START, HIST_RANGE2_END);
-    oldLHistogramRange1 = oldLHistogram->getRange(HIST_RANGE1_START, HIST_RANGE1_END);
-    oldLHistogramRange2 = oldLHistogram->getRange(HIST_RANGE2_START, HIST_RANGE2_END);
-    oldRHistogramRange1 = oldRHistogram->getRange(HIST_RANGE1_START, HIST_RANGE1_END);
-    oldRHistogramRange2 = oldRHistogram->getRange(HIST_RANGE2_START, HIST_RANGE2_END);
+    newLHistogramRange1 = newLHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
+    newLHistogramRange2 = newLHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
+    newRHistogramRange1 = newRHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
+    newRHistogramRange2 = newRHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
+    oldLHistogramRange1 = oldLHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
+    oldLHistogramRange2 = oldLHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
+    oldRHistogramRange1 = oldRHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
+    oldRHistogramRange2 = oldRHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
     
     // STATIC THREAT DETECTION
-    if (newLHistogramError > HIST_STATIC_PANIC_THRESHOLD)   // left
+    if (newLHistogramError > OBJECT_AVOIDANCE_ERROR_THRESHOLD)   // left
         obstacleDetected = -1;
-    if (newRHistogramError > HIST_STATIC_PANIC_THRESHOLD)   // right
+    if (newRHistogramError > OBJECT_AVOIDANCE_ERROR_THRESHOLD)   // right
         obstacleDetected = (obstacleDetected == -1) ? 2 :  1;
     
     // DYNAMIC THREAT DETECTION
@@ -247,11 +245,11 @@ sint8_t Vision::shouldWePanic (void)
                                                             oldLHistogramRange1, oldLHistogramRange2, 
                                                             newRHistogramRange1, newRHistogramRange2,
                                                             oldRHistogramRange1, oldRHistogramRange2 );*/
-    if ((newLHistogramRange2 < (oldLHistogramRange2 - HIST_DYNAMIC_PANIC_THRESHOLD)) &&     // left
-        (newLHistogramRange1 > (oldLHistogramRange1 + HIST_DYNAMIC_PANIC_THRESHOLD))    )
+    if ((newLHistogramRange2 < (oldLHistogramRange2 - OBJECT_AVOIDANCE_PANIC_THRESHOLD)) &&     // left
+        (newLHistogramRange1 > (oldLHistogramRange1 + OBJECT_AVOIDANCE_PANIC_THRESHOLD))    )
         obstacleDetected = (obstacleDetected ==  1) ? 2 : -1;
-    if ((newRHistogramRange2 < (oldRHistogramRange2 - HIST_DYNAMIC_PANIC_THRESHOLD)) &&     // right
-        (newRHistogramRange1 > (oldRHistogramRange1 + HIST_DYNAMIC_PANIC_THRESHOLD))    )
+    if ((newRHistogramRange2 < (oldRHistogramRange2 - OBJECT_AVOIDANCE_PANIC_THRESHOLD)) &&     // right
+        (newRHistogramRange1 > (oldRHistogramRange1 + OBJECT_AVOIDANCE_PANIC_THRESHOLD))    )
         obstacleDetected = (obstacleDetected == -1) ? 2 :  1;
     
     return obstacleDetected;
@@ -381,14 +379,11 @@ void Vision::createDepthImage (cv::Mat* dst, const uint16_t* src)
 
 
 /// @brief  TBD
-void Vision::createColorImage (cv::Mat* dst, const uint8_t* src)
+/*void Vision::createColorImage (cv::Mat* dst, const uint8_t* src)
 {
-    uint32_t i=0;
-    
-    for (i=0; i < IMAGE_HEIGHT * IMAGE_WIDTH * 3; i++)
-        dst->data[i] = (uint8_t) src[i];
+    memcpy(dst->data, src, IMAGE_HEIGHT * IMAGE_WIDTH * 3);
     cv::cvtColor(*dst, *dst, CV_RGB2BGR);
-}
+}*/
 
 
 /// @brief  Checks whether a given file exists on the system.

@@ -92,18 +92,18 @@ int main (void)
         if (_kbhit())
             break;
         
-        // Check for clients trying to connect
-        // TODO this currently blocks and it shoudln't ;(
+        // Check for clients trying to connect. This currently blocks but it could not.
+#if defined(DEPTH_STREAMING_ENABLED) || defined(COLOR_STREAMING_ENABLED)
         if (!clientConnected)
             clientConnected = tim.checkForClients();
+#endif
         
         // Sample the camera data
         vinny.captureFrame();
         
         // Robot behaviour
-        // check panic situation
-        
-        panicStations = vinny.shouldWePanic();
+        // Check the camera data for things that will make us panic
+        panicStations = vinny.checkForObstacles();
         if (panicStations > 0 && !turnCounter)
             turnCounter =  ATOMIC_TURN_AMOUNT;
         else if (panicStations < 0 && !turnCounter)
@@ -143,20 +143,25 @@ int main (void)
         fflush(stdout);
         
         // If there's a client connected send the depth data to them.
+#if defined(DEPTH_STREAMING_ENABLED) || defined(COLOR_STREAMING_ENABLED)
         if (clientConnected)
         {
-            //vinny.compressDepthFrame();
+    #ifdef DEPTH_STREAMING_ENABLED
+            vinny.compressDepthFrame();
+    #else
             vinny.compressColorFrame();
+    #endif
             uint32_t frameSize = (uint32_t) vinny.mStreamBuffer.size();
             retVal = tim.writeBytes(&frameSize, 4);
             retVal = tim.writeBytes(&(vinny.mStreamBuffer.front()), frameSize);
             if (retVal < 0)
                 break;
         }
+#endif
     }
 //    vinny.compressFrameToDisk("depthFrame.png");
     
-    printf("Exitting.\n");
+    printf("\nExitting.\n");
     
     return 0;
 }
