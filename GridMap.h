@@ -174,6 +174,107 @@ public:
             total += mTableNodes[i].second;
         return total;
     }
+    
+    uint32_t getNearestBackwardNode (const Point2i& p)
+    {
+        uint32_t graph_size = mGraph.size();
+        uint32_t i, min_node;
+        float min_dist, dist;
+        int lineOrientation = (mCurrentOrientation + 90) % 360;
+        std::vector<uint32_t> backward_nodes;
+        
+        // make sure we actually have a graph to check against.
+        if (graph_size == 0)
+            return 0;
+        
+        // find the subset of the graph which falls behind the given point.
+        for (i = 0; i < graph_size; i++)
+            if ((mGraph[i].p != p) && (behind_line(p, mGraph[i].p, lineOrientation)))
+                backward_nodes.push_back(i);
+        // check we have actually found something.
+        if (backward_nodes.size() == 0)
+            pritnf("Uh oh... we don't seem to have any backward nodes?\n");
+        
+        // calculate the closest node out of the found ones.
+        min_dist = INFINITY;
+        min_node = 0;
+        for (i = 0; i < backward_nodes.size(); i++)
+        {
+            dist = euclidean_distance(p, mGraph[backward_nodes[i]].p);
+            if (dist < min_dist)
+            {
+                min_dist = dist;
+                min_node = i;
+            }
+        }
+        
+        // return.
+        return min_node;
+    }
+    
+    
+    // takes the id's of 2 nodes and returns the shortest path connecting them in mGraph as a list
+    // with the start element at position[0] and the end element at position[-1]. returns an empty
+    // list in the case there is no path between the nodes.
+    std::vector<uint32_t> dijkstra (uint32_t start, uint32_t end)
+    {
+//        std::priority_queue<uint32_t, std::vector<uint32_t>, GridNodeComparator> Q;
+        std::priority_queue<GridNode*, std::vector<GridNode*>, GridNodeComparator> Q;
+        std::vector<uint32_t> shortest_path;
+        uint32_t* prev = (uint32_t*) malloc(mGraph.size() * sizeof(uint32_t));
+        uint32_t u, v, i;
+        float    alt;
+            
+        // initialise
+        for (i = 0; i < mGraph.size(); i++)
+        {
+            prev[i]        = UINT32_MAX;
+            mGraph[i].dist = INFINITY;
+        }
+        mGraph[start].dist = 0;
+        Q.push(&mGraph[start]);
+        
+        while (!Q.empty())
+        {
+            // grab the minimum element (and check it's not whack).
+            u = Q.top()->id;
+            Q.pop();
+            if (mGraph[u].dist == INFINITY || u == end)
+                break;
+
+            // relax the dijkstra
+            for (i = 0; i < mGraph[u].adj.size(); i++)
+            {
+                v   = mGraph[u].adj[i].id;                      // the ith neighbour of u
+                alt = mGraph[u].dist + mGraph[u].adj[i].prox;   // the total distance to v
+                if (alt < mGraph[v].dist)
+                {
+                    mGraph[v].dist = alt;
+                    prev[v] = u;
+                    Q.push(&mGraph[v]);
+                }
+            }
+        }
+        
+        // extract the shortest path.
+        u = end;
+        while (prev[u] != UINT32_MAX)
+        {
+            shortest_path.push_back(u);
+            u = prev[u];
+        }
+        if (shortest_path.size() > 0)
+        {
+            shortest_path.push_back(u);
+            std::reverse(shortest_path.begin(), shortest_path.end());
+        }
+        
+        // clean up + return.
+        free(prev);
+        return shortest_path;
+        //return mGraph[end].dist;
+    }
+    
 
     sint16_t mCurrentOrientation;    ///< currentOrientation in degrees. This is measured from the north vector. Should always be -360 < x < 360.
     uint32_t mCurrentNode;
@@ -189,6 +290,20 @@ private:
         float dx = p1.x - p2.x;
         float dy = p1.y - p2.y;
         return (dx*dx + dy*dy < POINT_EQUALITY_EPSILON2);
+    }
+    
+    
+    /// @brief  Returns true iff p2 falls behind the line made by a line at angle gamma through p1.
+    ///         a value of 90 for gamma will return true for all points with a y co-ordinate less than
+    ///         p1. likewise a value of 0 for gamma will return true for all points with an x co-ordinate
+    ///         greater than p1.
+    bool behind_line (const Point2i& p1, const Point2i& p2, const int gamma)
+    {
+        float gamma_rad = DEGTORAD(gamma);
+        Point2i p1_prime = p1 + Point2i((int) (100 * sin(gamma_rad)), (int) (100 * cos(gamma_rad)));
+        
+        int dot_product = (p1_prime.x - p1.x)*(p2.y - p1.y) - (p1_prime.y - p1.y)*(p2.x - p1.x);
+        return (dot_product < 0);
     }
     
     

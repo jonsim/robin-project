@@ -9,7 +9,7 @@
 #include "Vision.h"
 #include "TCPInterface.h"
 
-//#define MOVEMENT_ENABLED
+#define MOVEMENT_ENABLED
 #define ATOMIC_TURN_AMOUNT  10 // FPS delay
 #define MOVE_SPEED         200 // mm/s
 #define TURN_SPEED         200 // mm/s
@@ -68,21 +68,24 @@ void moveRobot (Robot* robot, sint32_t direction)
 int main (void)
 {
     // function variables
+#if defined(DEPTH_STREAMING_ENABLED) || defined(COLOR_STREAMING_ENABLED)
     bool_t   clientConnected = false;
-    sint32_t turnCounter = 0;
+#endif
+//    sint32_t turnCounter = 0;
     uint32_t frameCounter = 0;
     sint8_t  panicStations = 0;
     bool     markerFound;
     MarkerData markerData;
-    int      retVal;
     
     // module objects
 #ifdef MOVEMENT_ENABLED
     Robot    reginald;
-    uint8_t  bumperValues[2];
+//    uint8_t  bumperValues[2];
 #endif
     Vision vinny;
+#if defined(DEPTH_STREAMING_ENABLED) || defined(COLOR_STREAMING_ENABLED)
     TCPInterface tim(TCPSERVER, STREAMING_PORT_D);
+#endif
     
 #ifdef MOVEMENT_ENABLED
     // set the robot to safe mode (allowing us to move).
@@ -109,10 +112,10 @@ int main (void)
         // Robot behaviour
         // Check the camera data for things that will make us panic
         panicStations = vinny.checkForObstacles();
-        if (panicStations > 0 && !turnCounter)
+/*        if (panicStations > 0 && !turnCounter)
             turnCounter =  ATOMIC_TURN_AMOUNT;
         else if (panicStations < 0 && !turnCounter)
-            turnCounter = -ATOMIC_TURN_AMOUNT;
+            turnCounter = -ATOMIC_TURN_AMOUNT;*/
         
         // Check the camera data for sexy markers.
         if (frameCounter % TARGET_RECOGNITION_RUN_FREQUENCY == 0)
@@ -135,14 +138,12 @@ int main (void)
                 
                 
             }
-#ifdef MOVEMENT_ENABLED
-            if (markerFound)
-                reginald.moveToMarker(markerData);
-#endif
         }
         
 #ifdef MOVEMENT_ENABLED
-        // check cliff sensors
+        // do roboty things
+        reginald.timestep(panicStations, markerFound, markerData);
+/*        // check cliff sensors
         //   done automatically in safe mode
         
         // check bumpers
@@ -167,7 +168,7 @@ int main (void)
         {
             moveRobot(&reginald, 0);
             turnRobot(&reginald, turnCounter++);
-        }
+        }*/
 #endif
         
         // Print stats
@@ -184,7 +185,7 @@ int main (void)
             vinny.compressColorFrame();
     #endif
             uint32_t frameSize = (uint32_t) vinny.mStreamBuffer.size();
-            retVal = tim.writeBytes(&frameSize, 4);
+            int retVal = tim.writeBytes(&frameSize, 4);
             retVal = tim.writeBytes(&(vinny.mStreamBuffer.front()), frameSize);
             if (retVal < 0)
                 break;

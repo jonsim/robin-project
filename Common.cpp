@@ -37,6 +37,22 @@ float euclidean_distance2 (const Point2i& p1, const Point2i& p2)
 }
 
 
+/// @brief  Uses the Box-Muller transform to generate a single normally distributed random number.
+///         NB: This is not efficient. If I find myself calling it a lot consider using the polar
+///             form of the transform or potentially even the Ziggurat algorithm.
+///         NB: rand() must be seeded when this function is called. If in doubt, srand!
+/// @param  mu      The mean of the distribution.
+/// @param  sigma   The standard deviation of the distribution.
+/// @return         A random number normally distributed according to the supplied parameters.
+float Robot::randNormallyDistributed (float mu, float sigma)
+{
+    float U1 = ((float) rand()) / ((float) RAND_MAX);
+    float U2 = ((float) rand()) / ((float) RAND_MAX);
+    float Z0 = sqrt(-2 * log(U1)) * cos(2 * PI * U2);
+    return (Z0 * sigma) + mu;
+}
+
+
 void msleep (const uint32_t msec)
 {
     usleep(msec * 1000);

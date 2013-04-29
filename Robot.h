@@ -10,6 +10,7 @@
 #include "SerialInterface.h"
 #include "GridMap.h"
 #include <time.h>
+#include <queue>
 
 
 /*-------------------- DEFINES  --------------------*/
@@ -17,7 +18,8 @@
 #define PATHING_MARKER_STOPPING_DISTANCE  800 // mm. the distance to stop away from markers.
 #define PATHING_MAX_MOVE_DISTANCE        2000 // mm.
 #define PATHING_ANGULAR_STD_DEV            20 // degrees.
-#define PATHING_NAP_DURATION             2 // the amount of time, in seconds, to wait for scary things to go away.
+#define PATHING_NAP_DURATION                2 // the amount of time, in seconds, to wait for scary things to go away.
+#define TARGET_NAP_DURATION                10 // the amount of time, in seconds, to wait at tables.
 #define ROBOT_MOVE_SPEED                  200 // mm/s
 #define ROBOT_TURN_SPEED                  200 // mm/s
 
@@ -36,6 +38,13 @@ enum PathingType
     GREEDY_TABLE,
     DIRECT_ORDER
 };
+enum ActionPriority
+{
+    LOWEST = 0,
+    LEVEL1 = 1,
+    LEVEL2 = 2,
+    HIGHEST = 3
+};
 
 struct PathingAction
 {
@@ -46,6 +55,39 @@ struct PathingAction
     int         final_angle;
     
     PathingAction (void) : type(RANDOM), target(0,0), first_angle(0), displacement(0), final_angle(0) {}
+};
+
+enum MotorActionType
+{
+    ROTATION,
+    TRANSLATION
+};
+struct MotorAction
+{
+    MotorActionType type;
+    ActionPriority  priority;
+    union
+    {
+        int angle;
+        int displacement
+    } action;
+    
+    MotorAction (MotorActionType type_init, int value_init, int priority_init) : type(type_init), priority(priority_init)
+    {
+        if (type == ROTATION)
+            action.angle = value_init;
+        else
+            action.displacement = value_init;
+    }
+    
+    bool operator< (const MotorAction& other)
+    {
+        return (priority < other.priority);
+    }
+    bool operator> (const MotorAction& other)
+    {
+        return (priority > other.priority);
+    }
 };
 
 
@@ -93,14 +135,13 @@ public:
     
     void updateMap (void);
     
-    PathingAction generateRandomPathingAction (int rotation_mean=0);
-    PathingAction generateMarkerPathingAction (MarkerData& marker_data);
     void executePathingAction (PathingAction& action);
 
 
 private:
-    PathingType generatePathingType (void);
-    float randNormallyDistributed (float mu, float sigma);
+    PathingType   generateRandomPathingType   (void);
+    PathingAction generateRandomPathingAction (int rotation_mean=0);
+    PathingAction generateMarkerPathingAction (MarkerData& marker_data);
     
     void updateTargets (int new_move, int new_turn);
     void updateAccumulators (int d_move, int d_turn);
@@ -109,14 +150,21 @@ private:
     SerialInterface* mSI;
     RobotMode        mCurrentMode;
     GridMap          mMap;
+    // accumulators
     int  mMoveAccumulator;
     int  mMoveTarget;
     int  mTurnAccumulator;
     int  mTurnTarget;
-    bool mIsNapping;
+    // napping stuff
+    bool   mIsNapping;
     time_t mNapStarted;
+    int    mNapDuration;
+    // pathing states
     bool mIsInterruptable;
     bool mIsIdle;
+    PathingType               mCurrentActionType;
+    std::queue<MotorAction>   mMotorActions;
+    std::queue<PathingAction> mPathingActions;
 };
 
 #endif

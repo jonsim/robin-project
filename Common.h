@@ -47,6 +47,8 @@
 #endif
 #define RADTODEG(x) (x * (180.0/PI))
 #define DEGTORAD(x) (x * (PI/180.0))
+#define VECTOR_UNNORMALISED   0
+#define VECTOR_AUTONORMALISED 1
 
 typedef unsigned char          bool_t;
 typedef unsigned char          uint8_t;
@@ -89,18 +91,18 @@ typedef signed long  int       sint32_t;
     }
 
 // Min/Max functions.
-#if !(defined(MIN) && defined(MAX))
-    #ifdef SAFE_MIN_MAX
-        // less efficient min/max which are safe.
-        #define MIN(a,b)             \
-           ({ __typeof__ (a) _a = (a); \
-              __typeof__ (b) _b = (b); \
-              _a < _b ? _a : _b; })
-        #define MAX(a,b)               \
-           ({ __typeof__ (a) _a = (a); \
-              __typeof__ (b) _b = (b); \
-              _a > _b ? _a : _b; })
-    #else
+#ifdef SAFE_MIN_MAX
+    // less efficient min/max which are safe.
+    #define MIN(a,b)             \
+       ({ __typeof__ (a) _a = (a); \
+          __typeof__ (b) _b = (b); \
+          _a < _b ? _a : _b; })
+    #define MAX(a,b)               \
+       ({ __typeof__ (a) _a = (a); \
+          __typeof__ (b) _b = (b); \
+          _a > _b ? _a : _b; })
+#else
+    #if !(defined(MIN) && defined(MAX))
         // more efficient min/max but which suffer from double evaluation.
         #define MIN(a,b) (((a) < (b)) ? (a) : (b))
         #define MAX(a,b) (((a) > (b)) ? (a) : (b))
@@ -110,17 +112,15 @@ typedef signed long  int       sint32_t;
 
 
 /*-------------- CLASS DEFINITIONS --------------*/
-class Point2
+struct Point2
 {
-public:
     Point2 (const uint16_t x_init, const uint16_t y_init) : x(x_init), y(y_init) {}
     ~Point2 (void) {}
     uint16_t x, y;
 };
 
-class Point2i
+struct Point2i
 {
-public:
     Point2i  (const int x_init, const int y_init) : x(x_init), y(y_init) {}
     Point2i  (const int x_old,  const int y_old, const int displacement, const int angle)
     {
@@ -141,20 +141,54 @@ public:
     {
         return Point2i(x - other.x, y - other.y);
     }
+    bool operator== (const Point2i& other)
+    {
+        return ((x == other.x) && (y == other.y));
+    }
+    bool operator!= (const Point2i& other)
+    {
+        return ((x != other.x) || (y != other.y));
+    }
     int x, y;
 };
 
-class Point3
+struct Point3
 {
-public:
     Point3 (const float x_init, const float y_init, const float z_init) : x(x_init), y(y_init), z(z_init) {}
     ~Point3 (void) {}
     float x, y, z;
 };
 
-class Vector3
+struct Vector2
 {
-public:
+    Vector2 (const float x_init, const float y_init, const int type=VECTOR_UNNORMALISED) : x(x_init), y(y_init)
+    {
+        if (type == VECTOR_AUTONORMALISED)
+            normalise();
+    }
+    void normalise (void)
+    {
+        float m = sqrt(x*x + y*y);
+        x = x / m;
+        y = y / m;
+    }
+    float operator* (const Vector2& other)
+    {
+        return (x * other.x) + (y * other.y);
+    }
+    float angleTo (const Vector2& other)
+    {
+        float dot_product = this * other;
+        return RADTODEG(acos(dot_product));
+    }
+    Vector2 operator+ (const Vector2& other)
+    {
+        return Vector2(x + other.x, y + other.y, type & other.type);
+    }
+}
+
+struct Vector3
+{
     Vector3 (const float x_init, const float y_init, const float z_init) : x(x_init), y(y_init), z(z_init) {}
     ~Vector3 (void) {}
     float x, y, z;
@@ -175,6 +209,7 @@ uint16_t make_uint16_t (const uint8_t bh, const uint8_t bl);
 sint16_t make_sint16_t (const uint8_t bh, const uint8_t bl);
 float    euclidean_distance  (const Point2i& p1, const Point2i& p2);
 float    euclidean_distance2 (const Point2i& p1, const Point2i& p2);
+float    randNormallyDistributed (float mu, float sigma);
 void     msleep        (const uint32_t msec);
 int      _kbhit        (void);
 
