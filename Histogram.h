@@ -31,17 +31,17 @@ public:
     /// @brief  Constructor. The maximum value the histogram is able to take is given by the HIST_MAX_VALUE
     ///         define. Use a different constructor if this needs to be dynamic/different. The histogram is
     ///         initialised to zeros.
-    Histogram (void) : mMaxValue(HIST_MAX_VALUE)
+    /*Histogram (void) : mMaxValue(HIST_MAX_VALUE)
     {
         mHist = (uint32_t*) calloc(mMaxValue+1, sizeof(uint32_t));
-    }
+    }*/
     
     
     /// @brief  Constructor.
     /// @param  maximum_value   The maximum value the histogram is able to take. The histogram is
     ///                         initialised to zeros. If data needs to be initially loaded in, use a
     ///                         different constructor.
-    Histogram (const uint16_t maximum_value) : mMaxValue(maximum_value)
+    Histogram (const uint16_t maximum_value=HIST_MAX_VALUE) : mMaxValue(maximum_value)
     {
         mHist = (uint32_t*) calloc(mMaxValue+1, sizeof(uint32_t));
     }
@@ -51,13 +51,37 @@ public:
     /// @param  data            The data with which to initialise the histogram.
     /// @param  data_count      The number of items to read from the data array.
     /// @param  maximum_value   The maximum value the histogram is able to take.
-    Histogram (const uint16_t* data, const uint32_t data_count, const uint16_t maximum_value) : mMaxValue(maximum_value)
+    Histogram (const uint16_t* data, const uint32_t data_count, const uint16_t maximum_value=HIST_MAX_VALUE) : mMaxValue(maximum_value)
     {
         uint32_t one_step_index;
 
         mHist = (uint32_t*) calloc(mMaxValue+1, sizeof(uint32_t));
         for (one_step_index = 0; one_step_index < data_count; one_step_index++)
             mHist[MIN(data[one_step_index], mMaxValue)]++;
+    }
+    
+    
+    /// @brief  TODO
+    Histogram (cv::Mat& data, const uint16_t maximum_value=HIST_MAX_VALUE) : mMaxValue(maximum_value)
+    {
+        uint32_t elem_size;
+        uint16_t row_count, col_count;
+        uint8_t* data_ptr;
+        
+        // allocate
+        mHist = (uint32_t*) calloc(mMaxValue+1, sizeof(uint32_t));
+        
+        // copy in.
+        elem_size = (uint32_t) data.elemSize();
+        for (row_count = 0; row_count < data.rows; row_count++)
+        {
+            data_ptr = data.ptr(row_count);
+            for (col_count = 0; col_count < data.cols; col_count++)
+            {
+                mHist[MIN(*((uint16_t*) data_ptr), mMaxValue)]++;
+                data_ptr += elem_size;
+            }
+        }
     }
     
     

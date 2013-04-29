@@ -70,8 +70,12 @@ int main (void)
     // function variables
     bool_t   clientConnected = false;
     sint32_t turnCounter = 0;
+    uint32_t frameCounter = 0;
     sint8_t  panicStations = 0;
+    bool     markerFound;
+    MarkerData markerData;
     int      retVal;
+    
     // module objects
 #ifdef MOVEMENT_ENABLED
     Robot    reginald;
@@ -100,6 +104,7 @@ int main (void)
         
         // Sample the camera data
         vinny.captureFrame();
+        frameCounter = vinny.getFrameID();
         
         // Robot behaviour
         // Check the camera data for things that will make us panic
@@ -108,6 +113,33 @@ int main (void)
             turnCounter =  ATOMIC_TURN_AMOUNT;
         else if (panicStations < 0 && !turnCounter)
             turnCounter = -ATOMIC_TURN_AMOUNT;
+        
+        // Check the camera data for sexy markers.
+        if (frameCounter % TARGET_RECOGNITION_RUN_FREQUENCY == 0)
+        {
+            markerFound = vinny.checkForMarkers(&markerData);
+            if (markerFound)
+            {
+                printf(":O a marker @ %.0f mm\n", markerData.position.z);
+                
+                float z_p = PATHING_MARKER_STOPPING_DISTANCE * cos(-DEGTORAD(markerData.orientation));
+                float x_p = PATHING_MARKER_STOPPING_DISTANCE * sin(-DEGTORAD(markerData.orientation));
+                
+                float z_pp = markerData.position.z - z_p;
+                float x_pp = markerData.position.x - x_p;
+                
+                float h_d = sqrt((x_pp * x_pp) + (z_pp * z_pp));
+                float theta = RADTODEG(atan(x_pp / z_pp));
+                
+                printf("h_d = %.1f, theta = %.1f\n", h_d, theta);
+                
+                
+            }
+#ifdef MOVEMENT_ENABLED
+            if (markerFound)
+                reginald.moveToMarker(markerData);
+#endif
+        }
         
 #ifdef MOVEMENT_ENABLED
         // check cliff sensors

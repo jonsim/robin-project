@@ -7,6 +7,9 @@
 
 /*-------------------- INCLUDES --------------------*/
 #include "Common.h"
+// standard
+#include <math.h>
+#include <vector>
 // openni (note warnings are suppressed (and boy are there a lot of them).
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
@@ -18,7 +21,11 @@
 #pragma GCC diagnostic pop
 // opencv
 #include <cv.h>
+#include <cxcore.h>
 #include <highgui.h>
+#include "opencv2/objdetect/objdetect.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
 // my stuff
 #include "FrameBuffer.h"
 #include "Histogram.h"
@@ -63,10 +70,8 @@
 #define OBJECT_AVOIDANCE_RANGE2_START   700 // mm
 #define OBJECT_AVOIDANCE_RANGE2_END     899 // mm
 
-// pathing defines
-#define PATHING_MARKER_STOPPING_DISTANCE 800 // mm. the distance to stop away from markers.
-
 // target recognition defines
+#define TARGET_RECOGNITION_RUN_FREQUENCY                20 // every x frames the target recognition module is run.
 #define TARGET_RECOGNITION_MARKER_WIDTH                 50 // mm
 #define TARGET_RECOGNITION_MARKER_HEIGHT                50 // mm
 #define TARGET_RECOGNITION_MARKER_EPSILON               20 // mm
@@ -77,12 +82,13 @@
 #define TARGET_RECOGNITION_CASCADE_PATH                "/home/jon/individual_project/haarcascade_marker2_16.xml"
 
 // occupancy analysis defines
-#define OCCUPANCY_ANALYSIS_X_START       64 // the number of pixels cropped from the left   of the image before OA starts. 10% of the width.
-#define OCCUPANCY_ANALYSIS_X_END        576 // the number of pixels cropped from the right  of the image before OA starts. 10% of the width.
-#define OCCUPANCY_ANALYSIS_Y_START      120 // the number of pixels cropped from the top    of the image before OA starts. 25% of the height.
-#define OCCUPANCY_ANALYSIS_Y_END        360 // the number of pixels cropped from the bottom of the image before OA starts. 25% of the height.
-#define OCCUPANCY_ANALYSIS_RANGE_START  800 // mm. the start of the range to look for legs in.
-#define OCCUPANCY_ANALYSIS_RANGE_END   1600 // mm. the end   of the range to look for legs in.
+#define OCCUPANCY_ANALYSIS_X_START        64 // the number of pixels cropped from the left   of the image before OA starts. 10% of the width.
+#define OCCUPANCY_ANALYSIS_X_END         576 // the number of pixels cropped from the right  of the image before OA starts. 10% of the width.
+#define OCCUPANCY_ANALYSIS_Y_START       120 // the number of pixels cropped from the top    of the image before OA starts. 25% of the height.
+#define OCCUPANCY_ANALYSIS_Y_END         360 // the number of pixels cropped from the bottom of the image before OA starts. 25% of the height.
+#define OCCUPANCY_ANALYSIS_RANGE_START   800 // mm. the start of the range to look for legs in.
+#define OCCUPANCY_ANALYSIS_RANGE_END    1600 // mm. the end   of the range to look for legs in.
+#define OCCUPANCY_ANALYSIS_THRESHOLD   20000 // pixels. this many pixels in the given range will result in 'occupancy' being detected.
 
 
 
@@ -92,9 +98,6 @@
 
 
 /*---------------- CLASS DEFINITION ----------------*/
-using namespace xn; // TODO GET RID OF THIS LINE!
-
-
 class Vision
 {
 public:
@@ -109,56 +112,65 @@ public:
     /*void  buildDepthHistogram (void);
     uint32_t queryDepthHistogram (uint16_t v);*/
     sint8_t checkForObstacles (void);
-    float getFPS (void);
+    bool    checkForMarkers   (MarkerData* marker_data);
+    bool    checkForOccupancy (void);
+    float    getFPS (void);
+    uint32_t getFrameID (void);
     
     std::vector<uint8_t> mStreamBuffer;
     
 
 private:
+    // camera config stuff
     void loadCameraConfiguration   (void);
     void initialiseCamera          (void);
     void shutdownCamera            (void);
-    void setupServers              (void);
-    void setupServer               (void);
-    void checkForClientConnections (void);
     
+    // streaming functions
     void   createDepthImage (cv::Mat* dst, const uint16_t* src);
 //    void   createColorImage (cv::Mat* dst, const uint8_t*  src);
+    
+    // marker detection stuff
+    void kind_of_subsample (cv::Mat* dst, cv::Mat* src, int x_step, int y_step, int y_start, int y_end);
+    void loadMarkerCascade (void);
+    float cv_euclidean_distance2 (cv::Point_<int> p1, cv::Point_<int> p2);
+    int connectedComponentLabelling (cv::Mat& src, cv::Mat& dst);
+    uint32_t* makey_the_hist (cv::Mat& frame);  // TODO use my histogram class
+    int suppressNoise (cv::Mat& frame);
+    void extractCorners (cv::Mat& frame, cv::Point_<int>* p);
+    void projectPoints (cv::Mat& depthFrame, cv::Point_<int>* p2D, cv::Point3_<float>* p3D, int count);
+    bool detectMarkerRegions (cv::Mat& grayscale, std::vector<cv::Rect>* regions);
+    bool extractMarkerFromRegions (cv::Mat& color, cv::Mat& grayscale, cv::Mat& depth, std::vector<cv::Rect>* regions, MarkerData* marker_data);    // TODO this only takes color because we draw on it.
+    
+    // utility functions
     XnBool fileExists       (const char *fn);
     
-    // Vision Variables
-    // Frame container(s)
+    // Variables
+    // Frame Buffer
     FrameBuffer     mFrameBuffer;
-    // OpenNI image containers
-    Context         mContext;
-    ScriptNode      mScriptNode;
-    
+    // Marker detection stuff.
+    cv::CascadeClassifier mMarkerCascade;
+    std::vector<cv::Rect> mMarkerRegions;
+    // OpenNI data capture containers (for various things).
+    xn::Context     mContext;
+    xn::ScriptNode  mScriptNode;
 #ifdef DEPTH_STREAM
-    DepthGenerator  mDepthGenerator;
-    DepthMetaData   mDepthMetaData;
-    const uint16_t* mDepthData;
-    cv::Mat         mDepthFrame;
+    xn::DepthGenerator mDepthGenerator;
+    xn::DepthMetaData  mDepthMetaData;
+    const uint16_t*    mDepthData;
+    cv::Mat            mDepthFrame;
     #ifdef DEPTH_STREAMING_ENABLED
-    cv::Mat         mDepthStreamingFrame;
+    cv::Mat            mDepthStreamingFrame;
     #endif
 #endif
 #ifdef COLOR_STREAM
-    ImageGenerator  mColorGenerator;
-    ImageMetaData   mColorMetaData;
-    const uint8_t*  mColorData;
-    cv::Mat         mColorFrame;
+    xn::ImageGenerator mColorGenerator;
+    xn::ImageMetaData  mColorMetaData;
+    const uint8_t*     mColorData;
+    cv::Mat            mColorFrame;
+    cv::Mat            mGrayscaleFrame;
 #endif
-    XnFPSData       mXnFPS;
-    // OpenCV image containers
-    // Other image algorithm datas
-//    uint32_t        mDepthHistogram[MAX_DEPTH];
-//    uint32_t        mLHistogramErrorRangeCount;
-//    uint32_t        mLHistogramNearRangeCount;
-//    uint32_t        mRHistogramErrorRangeCount;
-//    uint32_t        mRHistogramNearRangeCount;
-//    Histogram       mHistogram;
-//    Histogram       mLHistogram;
-//    Histogram       mRHistogram;
+    XnFPSData   mXnFPS;
 };
 
 #endif

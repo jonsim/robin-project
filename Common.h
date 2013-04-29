@@ -16,6 +16,11 @@
 #include <sys/ioctl.h>  // _kbhit
 #include <termios.h>    // _kbhit
 #include <stropts.h>    // _kbhit
+#include <math.h>
+// opencv -- this shouldn't really be here, but because marker data is who cares.
+#include <cv.h>
+#include <cxcore.h>
+#include <highgui.h>
 
 
 
@@ -29,6 +34,19 @@
 #define IMAGE_HEIGHT 480
 #define PIXEL_SIZE   0.104200f
 #define FOCAL_LENGTH 120
+
+// Things that should already be defined but for some reason aren't on the pandaboard's implementation of c :(
+#ifndef UINT32_MAX
+    #define UINT32_MAX 0xFFFFFFFF   // this should definitely come from stdint.h, but it doesn't seem to want to so lets make sure we have it.
+#endif
+#ifndef INT32_MAX
+    #define INT32_MAX  0x7FFFFFFF   // See above.
+#endif
+#ifndef PI
+    #define PI 3.141592654
+#endif
+#define RADTODEG(x) (x * (180.0/PI))
+#define DEGTORAD(x) (x * (PI/180.0))
 
 typedef unsigned char          bool_t;
 typedef unsigned char          uint8_t;
@@ -71,22 +89,23 @@ typedef signed long  int       sint32_t;
     }
 
 // Min/Max functions.
-#ifdef SAFE_MIN_MAX
-    // less efficient min/max which are safe.
-    #define MIN(a,b)             \
-       ({ __typeof__ (a) _a = (a); \
-          __typeof__ (b) _b = (b); \
-          _a < _b ? _a : _b; })
-    #define MAX(a,b)               \
-       ({ __typeof__ (a) _a = (a); \
-          __typeof__ (b) _b = (b); \
-          _a > _b ? _a : _b; })
-#else
-    // more efficient min/max but which suffer from double evaluation.
-    #define MIN(a,b) (((a) < (b)) ? (a) : (b))
-    #define MAX(a,b) (((a) > (b)) ? (a) : (b))
+#if !(defined(MIN) && defined(MAX))
+    #ifdef SAFE_MIN_MAX
+        // less efficient min/max which are safe.
+        #define MIN(a,b)             \
+           ({ __typeof__ (a) _a = (a); \
+              __typeof__ (b) _b = (b); \
+              _a < _b ? _a : _b; })
+        #define MAX(a,b)               \
+           ({ __typeof__ (a) _a = (a); \
+              __typeof__ (b) _b = (b); \
+              _a > _b ? _a : _b; })
+    #else
+        // more efficient min/max but which suffer from double evaluation.
+        #define MIN(a,b) (((a) < (b)) ? (a) : (b))
+        #define MAX(a,b) (((a) > (b)) ? (a) : (b))
+    #endif
 #endif
-
 
 
 
@@ -99,12 +118,52 @@ public:
     uint16_t x, y;
 };
 
+class Point2i
+{
+public:
+    Point2i  (const int x_init, const int y_init) : x(x_init), y(y_init) {}
+    Point2i  (const int x_old,  const int y_old, const int displacement, const int angle)
+    {
+        x = x_old + ((int) (displacement * sin(DEGTORAD(angle))));
+        y = y_old + ((int) (displacement * cos(DEGTORAD(angle))));
+    }
+    Point2i  (const Point2i& p_old, const int displacement, const int angle)
+    {
+        x = p_old.x + ((int) (displacement * sin(DEGTORAD(angle))));
+        y = p_old.y + ((int) (displacement * cos(DEGTORAD(angle))));
+    }
+    ~Point2i (void) {}
+    Point2i operator+ (const Point2i& other)
+    {
+        return Point2i(x + other.x, y + other.y);
+    }
+    Point2i operator- (const Point2i& other)
+    {
+        return Point2i(x - other.x, y - other.y);
+    }
+    int x, y;
+};
+
+class Point3
+{
+public:
+    Point3 (const float x_init, const float y_init, const float z_init) : x(x_init), y(y_init), z(z_init) {}
+    ~Point3 (void) {}
+    float x, y, z;
+};
+
 class Vector3
 {
 public:
     Vector3 (const float x_init, const float y_init, const float z_init) : x(x_init), y(y_init), z(z_init) {}
     ~Vector3 (void) {}
     float x, y, z;
+};
+
+struct MarkerData
+{
+    cv::Point3_<float> position;
+    float              orientation;
 };
 
 
@@ -114,6 +173,8 @@ public:
 sint8_t  make_sint8_t  (const uint8_t b);
 uint16_t make_uint16_t (const uint8_t bh, const uint8_t bl);
 sint16_t make_sint16_t (const uint8_t bh, const uint8_t bl);
+float    euclidean_distance  (const Point2i& p1, const Point2i& p2);
+float    euclidean_distance2 (const Point2i& p1, const Point2i& p2);
 void     msleep        (const uint32_t msec);
 int      _kbhit        (void);
 

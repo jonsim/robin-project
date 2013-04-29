@@ -21,6 +21,22 @@ sint16_t make_sint16_t (const uint8_t bh, const uint8_t bl)
 }
 
 
+float euclidean_distance (const Point2i& p1, const Point2i& p2)
+{
+    float dx = (float) p1.x - p2.x;
+    float dy = (float) p1.y - p2.y;
+    return sqrt(dx*dx + dy*dy);
+}
+
+
+float euclidean_distance2 (const Point2i& p1, const Point2i& p2)
+{
+    float dx = (float) p1.x - p2.x;
+    float dy = (float) p1.y - p2.y;
+    return dx*dx + dy*dy;
+}
+
+
 void msleep (const uint32_t msec)
 {
     usleep(msec * 1000);

@@ -16,6 +16,7 @@ Vision::Vision (void) : mFrameBuffer(IMAGE_WIDTH, IMAGE_HEIGHT, SUBSAMPLING_FACT
 {
     loadCameraConfiguration();
     initialiseCamera();
+    loadMarkerCascade();
 }
 
 
@@ -30,8 +31,8 @@ Vision::~Vision (void)
 ///         THIS FUNCTION DOES NOT INITIALISE THE CAMERA: see initialiseCamera().
 void Vision::loadCameraConfiguration (void)
 {
-    EnumerationErrors errors;
-    XnStatus          retVal = XN_STATUS_OK;
+    xn::EnumerationErrors errors;
+    XnStatus retVal = XN_STATUS_OK;
 
     // Locate config file.
     printf("Reading config file... ");
@@ -194,6 +195,15 @@ float Vision::getFPS (void)
 {
     xnFPSMarkFrame(&mXnFPS);
     return xnFPSCalc(&mXnFPS);
+}
+
+
+/// @brief  Fetches the ID of the current frame, as recorded by the depth camera. As this is updated
+///         at the same time as the colour camera this can be considered the system-wide frame ID.
+/// @return The current frame ID.
+uint32_t Vision::getFrameID (void)
+{
+    return (uint32_t) mDepthMetaData.FrameID();
 }
 
 
@@ -397,6 +407,464 @@ XnBool Vision::fileExists(const char *fn)
 }
 
 
+/// @brief  TODO
+void Vision::loadMarkerCascade (void)
+{
+    int retVal;
+    retVal = mMarkerCascade.load(TARGET_RECOGNITION_CASCADE_PATH);
+    
+    if (!retVal)
+    {
+        perror("MarkerCascade load");
+        exit(EXIT_FAILURE);
+    }
+}
+
+
+/// @brief  TODO
+bool Vision::checkForMarkers (MarkerData* marker_data)
+{
+    //bool marker_seen, marker_found = false;
+    
+    // First make a grayscale map of the image. Equalising the histogram has the effect of removing
+    // a lot of the effects of differing light levels and increasing contrast.
+    cv::cvtColor(mColorFrame, mGrayscaleFrame, CV_BGR2GRAY);
+    cv::equalizeHist(mGrayscaleFrame, mGrayscaleFrame);
+    
+    // detect markers
+    detectMarkerRegions(mGrayscaleFrame, &mMarkerRegions);
+    if (mMarkerRegions.size() > 0)
+        return extractMarkerFromRegions(mColorFrame, mGrayscaleFrame, mDepthFrame, &mMarkerRegions, marker_data);
+    return false;
+}
+
+
+/// @brief  TODO
+bool Vision::detectMarkerRegions (cv::Mat& grayscale, std::vector<cv::Rect>* regions)
+{
+    int i;
+    std::vector<cv::Rect> internal_regions;
+//    cv::Mat gs_scaled(240, 320, CV_8UC1);
+//    kind_of_subsample(&gs_scaled, &grayscale, 2, 2, 0, 480);
+
+    // Run the haar cascade to detect the marker.
+    mMarkerCascade.detectMultiScale(grayscale, internal_regions, TARGET_RECOGNITION_HAAR_SCALING, TARGET_RECOGNITION_HAAR_NEIGHBOURS, CV_HAAR_SCALE_IMAGE);
+
+    // If we haven't found any markers (most of the time), return.
+    if (internal_regions.size() == 0)
+        return false;
+
+    // Replace the supplied list with the found marker(s).
+    regions->clear();
+    for (i = 0; i < (int) internal_regions.size(); i++)
+    {
+        regions->push_back(internal_regions[i]);
+        /*(*regions)[i].x *= 2;
+        (*regions)[i].y *= 2;
+        (*regions)[i].width *= 2;
+        (*regions)[i].height *= 2;*/
+    }
+    return true;
+}
+
+
+/// @brief  TODO
+bool Vision::extractMarkerFromRegions (cv::Mat& color, cv::Mat& grayscale, cv::Mat& depth, std::vector<cv::Rect>* regions, MarkerData* marker_data)
+{
+    int i, j;
+    cv::Mat clipped_marker;
+    cv::Point_<int>    marker_corners2[4];
+    cv::Point3_<float> marker_corners3[4];
+    float marker_width3d, marker_height3d, marker_depth3d;
+    float marker_orientation3d, marker_unfoldedwidth, marker_unfoldedheight;
+    cv::Point3_<float> marker_position3d;
+    int regions_size = regions->size();
+
+    // Okay, so we detected something - go through all the detected objects and analyse their likelihood of being our marker.
+    for (i = 0; i < regions_size; i++)
+    {
+        // binarise the image around the given threshold.
+        cv::threshold(grayscale((*regions)[i]), clipped_marker, TARGET_RECOGNITION_EXTRACTION_BINARY_THRESHOLD, 255, cv::THRESH_BINARY_INV);
+
+        // 'cluster' the image into connected regions. remove those regions that are too small (and are thus probably noise).
+        cv::Mat region_marker(clipped_marker.size(), CV_8UC1);
+        //int region_count = connectedComponentLabelling(clipped_marker, region_marker);
+        //int region_count_reduction = suppressNoise(region_marker);
+        connectedComponentLabelling(clipped_marker, region_marker);
+        suppressNoise(region_marker);
+        //printf("detected %d regions, reduced to %d\n", region_count, region_count - region_count_reduction);
+
+        // threshold this result. the regions will be numbers > 1, we don't care about what regions there are anymore, only
+        // that there is a foreground region (the marker, minus noise) and a background region (not the marker).
+        cv::threshold(region_marker, region_marker, 0, 255, cv::THRESH_BINARY);
+
+        // from this thresholded image, extract the 4 corners that make up the marker (if this is the marker at all).
+        extractCorners(region_marker, marker_corners2);
+        // Convert these to global image co-ordinates.
+        for (j = 0; j < 4; j++)
+            marker_corners2[j] += (*regions)[i].tl();
+        // convert these 4 2D points to 4 3D points.
+        projectPoints(depth, marker_corners2, marker_corners3, 4);
+
+        // extract their 3D info.
+        marker_width3d  = ((marker_corners3[2].x - marker_corners3[0].x) + (marker_corners3[3].x - marker_corners3[1].x)) / 2.0f;
+        marker_height3d = ((marker_corners3[0].y - marker_corners3[1].y) + (marker_corners3[2].y - marker_corners3[3].y)) / 2.0f;
+        marker_depth3d  = ((marker_corners3[0].z - marker_corners3[2].z) + (marker_corners3[1].z - marker_corners3[3].z)) / 2.0f;
+        marker_position3d = cv::Point3_<float>(((marker_corners3[0].x + marker_corners3[1].x + marker_corners3[2].x + marker_corners3[3].x) / 4.0f),
+                                               ((marker_corners3[0].y + marker_corners3[1].y + marker_corners3[2].y + marker_corners3[3].y) / 4.0f),
+                                               ((marker_corners3[0].z + marker_corners3[1].z + marker_corners3[2].z + marker_corners3[3].z) / 4.0f) );
+        marker_orientation3d  = (float) (-atan(marker_depth3d / marker_width3d) * (180.0 / PI));
+        marker_unfoldedwidth  = sqrt(marker_width3d*marker_width3d   + marker_depth3d*marker_depth3d);
+        marker_unfoldedheight = sqrt(marker_height3d*marker_height3d + marker_depth3d*marker_depth3d);
+
+        // check if the thing we're looking at could actually be a marker
+        if ((marker_unfoldedwidth  > (TARGET_RECOGNITION_MARKER_WIDTH  - TARGET_RECOGNITION_MARKER_EPSILON)) &&
+            (marker_unfoldedwidth  < (TARGET_RECOGNITION_MARKER_WIDTH  + TARGET_RECOGNITION_MARKER_EPSILON)) &&
+            (marker_unfoldedheight > (TARGET_RECOGNITION_MARKER_HEIGHT - TARGET_RECOGNITION_MARKER_EPSILON)) &&
+            (marker_unfoldedheight < (TARGET_RECOGNITION_MARKER_HEIGHT + TARGET_RECOGNITION_MARKER_EPSILON))   )
+        {
+            //printf("  MARKER DETECTED.  Position = (%.1f, %.1f, %.1f). Orientation = %.1f. Unfolded-size (wxh) = (%.1fx%.1f)\n", marker_position3d.x, marker_position3d.y, marker_position3d.z, marker_orientation3d, marker_unfoldedwidth, marker_unfoldedheight);
+            
+            // it is a marker! OMG! return it! (ignoring any subsequent marker objects... how could we discern them anyway?)
+            marker_data->position    = marker_position3d;
+            marker_data->orientation = marker_orientation3d;
+
+            // also draw it while we can
+            cv::line(color, marker_corners2[0], marker_corners2[1], cv::Scalar(255,0,255), 2, 8, 0);
+            cv::line(color, marker_corners2[1], marker_corners2[3], cv::Scalar(255,0,255), 2, 8, 0);
+            cv::line(color, marker_corners2[3], marker_corners2[2], cv::Scalar(0,255,255), 2, 8, 0);
+            cv::line(color, marker_corners2[2], marker_corners2[0], cv::Scalar(0,255,255), 2, 8, 0);
+
+            return true;
+        }
+        else
+        {
+            //printf("  MARKER LIKE OBJECT IGNORED 2d: (%.1fx%.1f).\n", marker_unfoldedwidth, marker_unfoldedheight);
+            regions->erase(regions->begin() + i);
+            regions_size--;
+            i--;
+        }
+    }
+    return false;
+}
+
+
+// TODO: we can output the region areas from this function but opencv wants to be a little diva and fuck up the heap when we try...
+int Vision::connectedComponentLabelling (cv::Mat& src, cv::Mat& dst)
+{
+    int x, y, c_index, n_index, w_index, n_label, w_label;
+    int xres = src.cols, yres = src.rows;
+    int region_count = 0;
+    int i;
+    uint8_t region_label;
+    std::vector< std::pair<int, int> > regions_equivalence;
+
+    //printf("executing first pass\n");
+    for (c_index = 0, y = 0; y < yres; y++)
+    {
+        for (         x = 0; x < xres; x++, c_index++)
+        {
+            // if the cell has data
+            if (src.data[c_index] != 0)
+            {
+                // neighbours
+                n_index = c_index - xres;
+                n_label = (y == 0) ? 0 : dst.data[n_index];
+                w_index = c_index - 1;
+                w_label = (x == 0) ? 0 : dst.data[w_index];
+                // if it has a labelled north.
+                if (n_label)
+                {
+                    // and a labelled west.
+                    if (w_label)
+                    {
+                        // and they're different.
+                        if (n_label != w_label)
+                        {
+                            // mark the regions as equivalent (unless they've already been marked).
+                            bool regions_already_equivalent = false;
+                            for (i = 0; i < (int) regions_equivalence.size(); i++)
+                            {
+                                regions_already_equivalent |= (regions_equivalence[i].first == n_label && regions_equivalence[i].second == w_label) ||
+                                                              (regions_equivalence[i].first == w_label && regions_equivalence[i].second == n_label);
+                            }
+                            if (!regions_already_equivalent)
+                            {
+                                regions_equivalence.push_back(std::pair<uint32_t, uint32_t>(MIN(n_label, w_label), MAX(n_label, w_label)));
+                            }
+                        }
+                    }
+                    // give it the north label.
+                    region_label = (uint8_t) n_label;
+                }
+                else if (w_label)
+                {
+                    // otherwise mark it with the west label.
+                    region_label = (uint8_t) w_label;
+                }
+                else
+                {
+                    // otherwise make it a new region.
+                    region_label = (uint8_t) ++region_count;
+                }
+            }
+            else
+            {
+                // no region for you.
+                region_label = 0;
+            }
+            // save it.
+            dst.data[c_index] = region_label;
+        }
+    }
+    //printf("finished first pass\n");
+    
+    // merge equivalent regions down. we also compress the region labels back to a contiguous range, because
+    // equivalent regions will have used extras, GOD DAMN IT MEG.
+    if (regions_equivalence.size() > 0)
+    {
+        uint32_t j;
+        uint32_t new_region_count;
+        uint32_t duplicate_index;
+        std::vector<uint32_t> region_mapping;
+        region_mapping.push_back(0);
+
+        // go through all the old regions
+        for (i = 1, new_region_count = 1; i <= region_count; i++)
+        {
+            // check if the region currently being considered is equivalent to any other, lower numbered, regions.
+            for (j = 0, duplicate_index = 0; j < regions_equivalence.size(); j++)
+            {
+                if (regions_equivalence[j].second == i)
+                {
+                    duplicate_index = regions_equivalence[j].first;
+                    break;
+                }
+            }
+
+            // if it is a duplicate region, set it to the old duplicate and don't update the new_region_count;
+            if (duplicate_index != 0)
+            {
+                if (region_mapping.size() <= duplicate_index)
+                    printf("uh oh... region_mapping.size()=%d, duplicate_index=%d\n", region_mapping.size(), duplicate_index);
+                region_mapping.push_back(region_mapping[duplicate_index]);
+            }
+            else
+                region_mapping.push_back(new_region_count++);
+        }
+        // apply the mapping
+        for (i = 0; i < src.size().area(); i++)
+            dst.data[i] = (uint8_t) region_mapping[dst.data[i]];
+        //printf("finished second pass\n");
+        return new_region_count;
+    }
+    else
+    {
+        //printf("no second pass necessary\n");
+        return region_count+1;
+    }
+}
+
+
+/// @brief  TODO
+uint32_t* Vision::makey_the_hist (cv::Mat& frame)
+{
+    uint32_t* r = (uint32_t*) calloc(256, sizeof(uint32_t));
+    uint32_t lim = frame.size().area();
+    for (uint32_t i = 0; i < lim; i++)
+        r[frame.data[i]]++;
+    return r;
+}
+
+
+/// @brief  TODO
+int Vision::suppressNoise (cv::Mat& frame)
+{
+    uint32_t v;
+    uint32_t* hist;
+    int reductions = 0;
+    uint8_t i;
+    int j;
+
+    hist = makey_the_hist(frame);
+    for (i = 1; i < 256; i++)
+    {
+        v = hist[i];
+        if (v == 0)
+            break;
+
+        if (v < TARGET_RECOGNITION_EXTRACTION_SIZE_THRESHOLD)
+        {
+            reductions++;
+            for (j = 0; j < frame.size().area(); j++)
+                if (frame.data[j] == i)
+                    frame.data[j] = 0;
+        }
+    }
+    free(hist);
+
+    return reductions;
+}
+
+
+/// @brief  TODO
+void Vision::extractCorners (cv::Mat& frame, cv::Point_<int>* p)
+{
+    int x=0, y=0;
+    int xres  = frame.cols, yres  = frame.rows;
+    int hxres = xres / 2,   hyres = yres / 2;
+    cv::Point_<int> candidate1,       candidate2;
+    float           candidate1_dist2, candidate2_dist2;
+    // add the images corner points
+    cv::Point_<int> frame_tl(0,      0);
+    cv::Point_<int> frame_tr(xres-1, 0);
+    cv::Point_<int> frame_bl(0,      yres-1);
+    cv::Point_<int> frame_br(xres-1, yres-1);
+
+
+    // find top left corner
+    // find leftmost
+    for (x = 0; x < hxres; x++)
+        for (y = 0; y < hyres; y++)
+            if (frame.data[(y*xres) + x])
+                goto tl_lm_corner;
+tl_lm_corner: candidate1 = cv::Point_<int>(x, y);
+    // find topmost
+    for (y = 0; y < hyres; y++)
+        for (x = 0; x < hxres; x++)
+            if (frame.data[(y*xres) + x])
+                goto tl_tm_corner;
+tl_tm_corner: candidate2 = cv::Point_<int>(x, y);
+    candidate1_dist2 = cv_euclidean_distance2(candidate1, frame_tl);
+    candidate2_dist2 = cv_euclidean_distance2(candidate2, frame_tl);
+    p[0] = (candidate1_dist2 < candidate2_dist2) ? candidate1 : candidate2;
+    
+
+    // find bottom left corner
+    // find leftmost
+    for (x = 0; x < hxres; x++)
+        for (y = yres-1; y >= hyres; y--)
+            if (frame.data[(y*xres) + x])
+                goto bl_lm_corner;
+bl_lm_corner: candidate1 = cv::Point_<int>(x, y);
+    // find bottommost
+    for (y = yres-1; y >= hyres; y--)
+        for (x = 0; x < hxres; x++)
+            if (frame.data[(y*xres) + x])
+                goto bl_bm_corner;
+bl_bm_corner: candidate2 = cv::Point_<int>(x, y);
+    candidate1_dist2 = cv_euclidean_distance2(candidate1, frame_bl);
+    candidate2_dist2 = cv_euclidean_distance2(candidate2, frame_bl);
+    p[1] = (candidate1_dist2 < candidate2_dist2) ? candidate1 : candidate2;
+    
+    
+    // find top right corner
+    // find rightmost
+    for (x = xres-1; x >= hxres; x--)
+        for (y = 0; y < hyres; y++)
+            if (frame.data[(y*xres) + x])
+                goto tr_rm_corner;
+tr_rm_corner: candidate1 = cv::Point_<int>(x, y);
+    // find topmost
+    for (y = 0; y < hyres; y++)
+        for (x = xres-1; x >= hxres; x--)
+            if (frame.data[(y*xres) + x])
+                goto tr_tm_corner;
+tr_tm_corner: candidate2 = cv::Point_<int>(x, y);
+    candidate1_dist2 = cv_euclidean_distance2(candidate1, frame_tr);
+    candidate2_dist2 = cv_euclidean_distance2(candidate2, frame_tr);
+    p[2] = (candidate1_dist2 < candidate2_dist2) ? candidate1 : candidate2;
+    
+
+    // find bottom right corner
+    // find rightmost
+    for (x = xres-1; x >= hxres; x--)
+        for (y = yres-1; y >= hyres; y--)
+            if (frame.data[(y*xres) + x])
+                goto br_rm_corner;
+br_rm_corner: candidate1 = cv::Point_<int>(x, y);
+    // find bottommost
+    for (y = yres-1; y >= hyres; y--)
+        for (x = xres-1; x >= hxres; x--)
+            if (frame.data[(y*xres) + x])
+                goto br_bm_corner;
+br_bm_corner: candidate2 = cv::Point_<int>(x, y);
+    candidate1_dist2 = cv_euclidean_distance2(candidate1, frame_br);
+    candidate2_dist2 = cv_euclidean_distance2(candidate2, frame_br);
+    p[3] = (candidate1_dist2 < candidate2_dist2) ? candidate1 : candidate2;
+}
+
+
+/// @brief  TODO
+void Vision::projectPoints (cv::Mat& depthFrame, cv::Point_<int>* p2D, cv::Point3_<float>* p3D, int count)
+{
+    static const int xres = depthFrame.cols, yres = depthFrame.rows;
+    static const float projection_constant = (((PIXEL_SIZE * IMAGE_WIDTH * 2) / xres) / FOCAL_LENGTH);
+    int i;
+    
+    for (i = 0; i < count; i++)
+    {
+        p3D[i].z = *((uint16_t*) (depthFrame.data + (((p2D[i].y * xres) + p2D[i].x)*2)));
+        p3D[i].x = (p2D[i].x - (xres/2)) * p3D[i].z * projection_constant;
+        p3D[i].y = ((yres/2) - p2D[i].y) * p3D[i].z * projection_constant;
+    }
+}
+
+
+/// @brief  TODO
+float Vision::cv_euclidean_distance2 (cv::Point_<int> p1, cv::Point_<int> p2)
+{
+    float dx = (float) p1.x - p2.x;
+    float dy = (float) p1.y - p2.y;
+    return dx*dx + dy*dy;
+}
+
+
+/// @brief  TODO.
+void Vision::kind_of_subsample (cv::Mat* dst, cv::Mat* src, int x_step, int y_step, int y_start, int y_end)
+{
+    int x, y, dst_i;
+    int xres = src->size().width;
+//    int yres = src->size().height;
+
+    for (dst_i=0, y=y_start; y < y_end; y += y_step)
+    {
+        for (x=0; x < xres; x += x_step, dst_i++)
+        {
+            // sum all substep pixels
+            int substep_total = 0;
+            int substep_nzero = 0;
+            for (int y_prime = 0; y_prime < y_step; y_prime++)
+            {
+                for (int x_prime = 0; x_prime < x_step; x_prime++)
+                {
+                    int v = src->data[((y + y_prime) * xres) + (x + x_prime)];
+                    if (v != 0)
+                    {
+                        substep_nzero++;
+                        substep_total += v;
+                    }
+                }
+            }
+
+            dst->data[dst_i] = (substep_nzero == 0) ? 0u : (uint8_t) (substep_total / substep_nzero);
+        }
+    }
+}
+
+
+bool Vision::checkForOccupancy (void)
+{
+    // Construct the clipping frame.
+    cv::Rect clipping_frame(cv::Point_<int>(OCCUPANCY_ANALYSIS_X_START, OCCUPANCY_ANALYSIS_Y_START), cv::Point_<int>(OCCUPANCY_ANALYSIS_X_END, OCCUPANCY_ANALYSIS_Y_END));
+    
+    // Make a histogram of the clipped depth.
+    cv::Mat clipped_depth_frame = mDepthFrame(clipping_frame);
+    Histogram clipped_depth_histogram(clipped_depth_frame);
+    
+    // Take a cheeky peeky at the histogram to see if the chunk we want is sufficiently full of 'stuff'.
+    return (clipped_depth_histogram.getRange(OCCUPANCY_ANALYSIS_RANGE_START, OCCUPANCY_ANALYSIS_RANGE_END) > OCCUPANCY_ANALYSIS_THRESHOLD);
+}
 
 
 /// @brief  Unit testing.
