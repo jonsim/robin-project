@@ -22,6 +22,7 @@
 #define TARGET_NAP_DURATION                10 // the amount of time, in seconds, to wait at tables.
 #define ROBOT_MOVE_SPEED                  200 // mm/s
 #define ROBOT_TURN_SPEED                  200 // mm/s
+#define PATHING_MAX_PATHING_ACTIONS        50
 
 enum RobotMode
 {
@@ -133,19 +134,29 @@ public:
     
     void timestep (sint8_t object_avoidance, bool target_recognition, MarkerData& target_recognition_data);
     
-    void updateMap (void);
+//    void updateMap (void);
     
-    void executePathingAction (PathingAction& action);
+//    void executePathingAction (PathingAction& action);
 
 
 private:
     PathingType   generateRandomPathingType   (void);
     PathingAction generateRandomPathingAction (int rotation_mean=0);
+    PathingAction generateN2NPathingAction (const uint32_t start, const uint32_t end);
+    PathingAction generateN2NPathingAction (const Point2i& start, const Point2i& end);
     PathingAction generateMarkerPathingAction (MarkerData& marker_data);
     
     void updateTargets (int new_move, int new_turn);
     void updateAccumulators (int d_move, int d_turn);
     void zeroTargetsAndAccumulators (void);
+    
+    void startNapping (int duration);
+    bool nappingTimeUp (void);
+    
+    void processMotorActions (void);
+    void executePathingAction (void);
+    void reroutePathingActions (void);
+    void dropPathingActions (void);
 
     SerialInterface* mSI;
     RobotMode        mCurrentMode;
@@ -160,9 +171,10 @@ private:
     time_t mNapStarted;
     int    mNapDuration;
     // pathing states
-    bool mIsInterruptable;
+//    bool mIsInterruptable;
     bool mIsIdle;
-    PathingType               mCurrentActionType;
+//    PathingType               mCurrentActionType;
+    PathingAction             mCurrentAction;
     std::queue<MotorAction>   mMotorActions;
     std::queue<PathingAction> mPathingActions;
 };

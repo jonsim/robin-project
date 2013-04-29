@@ -334,7 +334,7 @@ void Robot::printBatteryStatus (void) const
     printf("Battery status: %d mV, %d mA, %d'C, %d / %d mAh.\n", voltage, current, temperature, charge, capacity);
 }
 
-
+/*
 /// @brief  Updates the Robot's internal map with the latest actuator readings. It is strongly
 ///         recommended to call this every time a new movement instruction is issued.
 void Robot::updateMap (void)
@@ -342,7 +342,7 @@ void Robot::updateMap (void)
     const sint16_t latestDistance = getDistance();
     const sint16_t latestAngle = getAngle();
     mMap.addRelativeReadings(latestDistance, latestAngle);
-}
+}*/
 
 
 void Robot::updateTargets (int new_move, int new_turn)
@@ -366,6 +366,7 @@ void Robot::updateAccumulators (int d_move, int d_turn)
     if ((mTurnTarget > 0 && mTurnAccumulator >= mTurnTarget) ||
         (mTurnTarget < 0 && mTurnAccumulator <= mTurnTarget)   )
     {
+        printf("turn limit reached\n");
         if (mMoveAccumulator != 0)
             printf("uh oh, we somehow accumulated movement despite actually rotating (a=%d). Zeroing out.\n", mMoveAccumulator);
         zeroTargetsAndAccumulators();
@@ -374,39 +375,10 @@ void Robot::updateAccumulators (int d_move, int d_turn)
     else if ((mMoveTarget > 0 && mMoveAccumulator >= mMoveTarget) ||
              (mMoveTarget < 0 && mMoveAccumulator <= mMoveTarget)   )
     {
+        printf("move limit reached\n");
         if (mTurnAccumulator != 0)
             printf("uh oh, we somehow accumulated rotation despite actually moving (a=%d). Zeroing out.\n", mTurnAccumulator);
         zeroTargetsAndAccumulators
-    }
-}
-
-
-void Robot::checkJobs (void)
-{
-    if (mIsIdle && !mMotorActions.empty())
-    {
-        // grab the next action
-        MotorAction next = mMotorActions.front();
-        mMotorActions.pop_front();
-        
-        // load her up
-        zeroTargetsAndAccumulators();
-        if (next.type == ROTATION)
-        {
-            updateTargets(0, next.action.angle);
-            if (next.action.angle > 0)
-                setSpeed(ROBOT_TURN_SPEED, -ROBOT_TURN_SPEED);  // CW
-            else
-                setSpeed(-ROBOT_TURN_SPEED, ROBOT_TURN_SPEED);  // CCW
-        }
-        else
-        {
-            updateTargets(next.action.displacement, 0);
-            if (next.action.displacement > 0)
-                setSpeed(ROBOT_MOVE_SPEED, ROBOT_MOVE_SPEED);
-            else
-                setSpeed(-ROBOT_MOVE_SPEED, -ROBOT_MOVE_SPEED);
-        }
     }
 }
 
@@ -440,29 +412,94 @@ bool Robot::nappingTimeUp (void)
 }
 
 
-void Robot::shittyPathing (sint8_t object_avoidance, bool target_recognition, MarkerData& target_recognition_data)
+void Robot::processMotorActions (void)
 {
-    static const int turnAmount = 8;
-    static int turnDirection = 0;
-    static int moveDirection = 0;
-    uint8_t bumperValues[2];
+    if (mIsIdle)
+    {
+        // grab the next pathing action and convert it down to motor actions
+        if (mMotorActions.empty() && !mPathingActions.empty())
+            executePathingAction();
+        
+        if (!mMotorActions.empty())
+        {
+            // grab the next motor action
+            MotorAction next = mMotorActions.front();
+            mMotorActions.pop_front();
+            
+            // load her up
+            zeroTargetsAndAccumulators();
+            if (next.type == ROTATION)
+            {
+                updateTargets(0, next.action.angle);
+                if (next.action.angle > 0)
+                    setSpeed(ROBOT_TURN_SPEED, -ROBOT_TURN_SPEED);  // CW
+                else
+                    setSpeed(-ROBOT_TURN_SPEED, ROBOT_TURN_SPEED);  // CCW
+            }
+            else
+            {
+                updateTargets(next.action.displacement, 0);
+                if (next.action.displacement > 0)
+                    setSpeed(ROBOT_MOVE_SPEED, ROBOT_MOVE_SPEED);
+                else
+                    setSpeed(-ROBOT_MOVE_SPEED, -ROBOT_MOVE_SPEED);
+            }
+        }
+    }
+}
+
+void Robot::executePathingAction (void)
+{
+    PathingAction action = mPathingActions.front();
+    mPathingActions.pop();
+    mCurrentAction = action;
     
-    // check for bumpers
-    getBumperValues(bumperValues);
-    if (bumperValues[0])            // left
-        turnDirection = turnAmount;
-    else if (bumperValues[1])       // right
-        turnDirection = -turnAmount;
+    ActionPriority priority = LEVEL1;
+    if (action.type == GREEDY_TABLE)
+        priority = LEVEL2;
     
-    // check for objects
-    if (object_avoidance < 0)       // left
-        turnDirection = turnAmount;
-    else if (object_avoidance > 0)  // right
-        turnDirection = -turnAmount;
+    if (action.first_angle != 0)
+        mMotorActions.push_back(MotorAction(ROTATION,     action.first_angle,  priority));
+    if (action.displacement != 0)
+        mMotorActions.push_back(MotorAction(DISPLACEMENT, action.displacement, priority));
+    if (action.final_angle != 0)
+        mMotorActions.push_back(MotorAction(ROTATION,     action.final_angle,  priority));
+}
+
+
+/// @brief  Reroutes the the path to the final target in the pathing actions queue via only graph
+///         nodes (using the closest, backward node first).
+void Robot::reroutePathingActions (void)
+{
+    // work out where we're actually going and then clear the whole queue - we don't need any of that crap.
+    Point2i  final_destination = mPatchingActions.back().target;
+    uint32_t final_destination_node = mMap.lookupPoint(final_destination);
+    dropPathingActions();
+    if (final_destination_node == UINT32_MAX)
+    {
+        printf("oh no\n");
+        return;
+    }
     
-    // check for markers
-    if (target_recognition)
-        turnDirection = 0;
+    // Get the nearest backward node.
+    uint32_t nearest_back_node = mMap.getNearestBackwardNode(mMap.mGraph[mMap.mCurrentNode]);
+    
+    // add the pathing action from the current position to the nearest backward node
+    mPathingActions.push(generateN2NPathingAction(mMap.mCurrentNode, nearest_back_node));
+    
+    // Get the shortest path from that node to the target.
+    std::vector<uint32_t> shortest_path = mMap.dijkstra(nearest_back_node, final_destination_node);
+    uint32_t i, shortest_path_length = shortest_path.size();
+    if (shortest_path_length > 0)
+        for (i = 0; i < shortest_path_length-1; i++)
+            mPathingActions.push(generateN2NPathingAction(shortest_path[i], shortest_path[i+1]));
+}
+
+void Robot::dropPathingActions (void)
+{
+    mPathingActions.clear();
+    mMotorActions.clear();
+    mIsIdle = true;
 }
 
 
@@ -480,7 +517,7 @@ void Robot::timestep (sint8_t object_avoidance, bool target_recognition, MarkerD
     // handle napping and exit straight out if we are currently napping.
     if (mIsNapping)
     {
-        if (nappingTimeUp())
+        if (!nappingTimeUp())
             return;
         mIsNapping = false;
         has_napped = true;
@@ -495,21 +532,32 @@ void Robot::timestep (sint8_t object_avoidance, bool target_recognition, MarkerD
     if (!action_generated)
     {
         getBumperValues(bumperValues);
-        bool bumperActivated = (bumperValues[0] || bumperValues[1]);
-        if (bumperActivated && !has_napped)
+        if ((bumperValues[0] || bumperValues[1]) && !has_napped)
         {
             startNapping(PATHING_NAP_DURATION);
             return;
         }
-        else if (bumperActivated && has_napped)
+        else if ((bumperValues[0] || bumperValues[1]) && has_napped)
         {
             zeroTargetsAndAccumulators();
-            if (bumperValues[0] && !bumperValues[1])        // just the left bumper (so rotate right).
-                action = generateRandomPathingAction(90);
-            else if (!bumperValues[0] &&  bumperValues[1])  // just the right bumper (so rotate left).
-                action = generateRandomPathingAction(-90);
-            else                                            // both bumpers, spin right round, right round.
-                action = generateRandomPathingAction(180);
+            
+            if (mCurrentAction.type == GREEDY_TABLE)
+            {
+                reroutePathingActions();
+            }
+            else
+            {
+                dropPathingActions();
+                
+                if (bumperValues[0] && !bumperValues[1])        // just the left bumper (so rotate right).
+                    next_rotation_offset = 90;
+                else if (!bumperValues[0] &&  bumperValues[1])  // just the right bumper (so rotate left).
+                    next_rotation_offset = -90;
+                else                                            // both bumpers, spin right round, right round.
+                    next_rotation_offset = 180;
+                
+                mPathingActions.push(generateRandomPathingAction(next_rotation_offset));
+            }
             action_generated = true;
         }
     }
@@ -528,32 +576,55 @@ void Robot::timestep (sint8_t object_avoidance, bool target_recognition, MarkerD
             // okay now we've had a little snooze, but there's still something freaky as shit out there.
             // TAKE EVASIVE ACTION.
             zeroTargetsAndAccumulators();
-            if (object_avoidance == -1)                     // just something scary on the left, turn right.
-                action = generateRandomPathingAction(90);
-            else if (object_avoidance == 1)                 // just something scary on the right, turn left.
-                action = generateRandomPathingAction(-90);
-            else                                            // both sides :(
-                action = generateRandomPathingAction(180);
+            
+            if (mCurrentAction.type == GREEDY_TABLE)
+            {
+                reroutePathingActions();
+            }
+            else
+            {
+                dropPathingActions();
+                
+                if (object_avoidance == -1)                     // just something scary on the left, turn right.
+                    next_rotation_offset = 90;
+                else if (object_avoidance == 1)                 // just something scary on the right, turn left.
+                    next_rotation_offset = -90;
+                else                                            // both sides :(
+                    next_rotation_offset = 180;
+                
+                mPathingActions.push(generateRandomPathingAction(next_rotation_offset));
+            }
             action_generated = true;
         }
     }
     
     // check marker detection, but only respond to it if we're not already doing something important.
-    if (okay_to_proceed)
+    if (!action_generated)
     {
-        if (target_recognition && mIsInterruptable)
+        if (target_recognition)
         {
-            action = generateMarkerPathingAction(target_recognition_data);
-            okay_to_proceed = false;
+            if (mCurrentAction.type != GREEDY_TABLE || (mCurrentAction.type == GREEDY_TABLE && mPathingActions.size() < 1))
+            {
+                zeroTargetsAndAccumulators();
+                dropPathingActions();
+                
+                mPathingActions.push(generateMarkerPathingAction(target_recognition_data));
+                
+                action_generated = true;
+            }
         }
     }
     
-    // update our current jobs
-    checkJobs();    // TODO nope because now we don't check the bumpers :(
-    
     // if we've got through that gauntlet it means we're chilling out safetly and have nothing to do!
     // we should probably find something to do tbh...
-    action = generateRandomPathingAction(next_rotation_offset);
+    if (!action_generated && mPathingActions.size() == 0 && mMotorActions.size() == 0)
+        {
+            mPathingActions.push(generateRandomPathingAction(0));
+        }
+    }
+    
+    // actually execute the jobs we've spent so long constructing.
+    processMotorActions();
 }
 
 
@@ -633,6 +704,12 @@ PathingAction Robot::generateRandomPathingAction (int rotation_mean)
 }
 
 
+PathingAction Robot::generateN2NPathingAction (const uint32_t start, const uint32_t end)
+{
+    return generateN2NPathingAction(mMap.mGraph[start], mMap.mGraph[end]);
+}
+
+
 PathingAction Robot::generateN2NPathingAction (const Point2i& start, const Point2i& end)
 {
     float currentOrientation = (float) mMap.mCurrentOrientation;
@@ -683,7 +760,7 @@ PathingAction Robot::generateMarkerPathingAction (MarkerData& marker_data)
     return action;
 }
 
-
+/*
 /// @brief  converts a path to a load of pathing actions
 std::vector<PathingAction> Robot::generateShortestPathingActions (uint32_t target_node)
 {
@@ -720,4 +797,4 @@ void Robot::executePathingActions (std::vector<PathingAction>& actions)
 {
     for (uint32_t i = 0; i < actions.size(); i++)
         executePathingAction(actions[i]);
-}
+}*/

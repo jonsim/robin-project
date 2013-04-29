@@ -167,6 +167,16 @@ public:
             printf("results[%d] = %d\n", i, results[i]);
     }
     
+    /// @brief  Returns the number of the node associated with the supplied point or UINT32_MAX if
+    ///         the point doesn't exist in the graph.
+    uint32_t lookupPoint (const Point2i& p)
+    {
+        for (uint32_t i = 0; i < mGraph.size(); i++)
+            if (mGraph[i].p == p)
+                return i;
+        return UINT32_MAX;
+    }
+    
     uint32_t tableWeightsSum (void)
     {
         uint32_t i, total = 0;
