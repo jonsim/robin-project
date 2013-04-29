@@ -16,7 +16,7 @@
 
 
 
-void turnRobot (Robot* robot, sint32_t direction)
+/*void turnRobot (Robot* robot, sint32_t direction)
 {
     static bool_t alreadyTurning = 0;
     
@@ -58,7 +58,7 @@ void moveRobot (Robot* robot, sint32_t direction)
         alreadyMoving = 1;
         robot->setSpeed(-MOVE_SPEED, -MOVE_SPEED);
     }
-}
+}*/
 
 
 
@@ -121,7 +121,7 @@ int main (void)
         if (frameCounter % TARGET_RECOGNITION_RUN_FREQUENCY == 0)
         {
             markerFound = vinny.checkForMarkers(&markerData);
-            if (markerFound)
+            if (markerFound)        // TODO << delete this guy
             {
                 printf(":O a marker @ %.0f mm\n", markerData.position.z);
                 

@@ -44,7 +44,7 @@ float euclidean_distance2 (const Point2i& p1, const Point2i& p2)
 /// @param  mu      The mean of the distribution.
 /// @param  sigma   The standard deviation of the distribution.
 /// @return         A random number normally distributed according to the supplied parameters.
-float Robot::randNormallyDistributed (float mu, float sigma)
+float randNormallyDistributed (float mu, float sigma)
 {
     float U1 = ((float) rand()) / ((float) RAND_MAX);
     float U2 = ((float) rand()) / ((float) RAND_MAX);

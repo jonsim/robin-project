@@ -70,10 +70,10 @@ struct MotorAction
     union
     {
         int angle;
-        int displacement
+        int displacement;
     } action;
     
-    MotorAction (MotorActionType type_init, int value_init, int priority_init) : type(type_init), priority(priority_init)
+    MotorAction (MotorActionType type_init, int value_init, ActionPriority priority_init) : type(type_init), priority(priority_init)
     {
         if (type == ROTATION)
             action.angle = value_init;

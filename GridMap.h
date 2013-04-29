@@ -203,7 +203,7 @@ public:
                 backward_nodes.push_back(i);
         // check we have actually found something.
         if (backward_nodes.size() == 0)
-            pritnf("Uh oh... we don't seem to have any backward nodes?\n");
+            printf("Uh oh... we don't seem to have any backward nodes?\n");
         
         // calculate the closest node out of the found ones.
         min_dist = INFINITY;
@@ -310,7 +310,7 @@ private:
     bool behind_line (const Point2i& p1, const Point2i& p2, const int gamma)
     {
         float gamma_rad = DEGTORAD(gamma);
-        Point2i p1_prime = p1 + Point2i((int) (100 * sin(gamma_rad)), (int) (100 * cos(gamma_rad)));
+        Point2i p1_prime(p1.x + ((int) (100 * sin(gamma_rad))), p1.y + ((int) (100 * cos(gamma_rad))));
         
         int dot_product = (p1_prime.x - p1.x)*(p2.y - p1.y) - (p1_prime.y - p1.y)*(p2.x - p1.x);
         return (dot_product < 0);
@@ -413,69 +413,6 @@ private:
 
         // add the new node to the graph.
         mGraph.push_back(n_new);
-    }
-    
-    
-    // takes the id's of 2 nodes and returns the shortest path connecting them in mGraph as a list
-    // with the start element at position[0] and the end element at position[-1]. returns an empty
-    // list in the case there is no path between the nodes.
-    std::vector<uint32_t> dijkstra (uint32_t start, uint32_t end)
-    {
-//        std::priority_queue<uint32_t, std::vector<uint32_t>, GridNodeComparator> Q;
-        std::priority_queue<GridNode*, std::vector<GridNode*>, GridNodeComparator> Q;
-        std::vector<uint32_t> shortest_path;
-        uint32_t* prev = (uint32_t*) malloc(mGraph.size() * sizeof(uint32_t));
-        uint32_t u, v, i;
-        float    alt;
-            
-        // initialise
-        for (i = 0; i < mGraph.size(); i++)
-        {
-            prev[i]        = UINT32_MAX;
-            mGraph[i].dist = INFINITY;
-        }
-        mGraph[start].dist = 0;
-        Q.push(&mGraph[start]);
-        
-        while (!Q.empty())
-        {
-            // grab the minimum element (and check it's not whack).
-            u = Q.top()->id;
-            Q.pop();
-            if (mGraph[u].dist == INFINITY || u == end)
-                break;
-
-            // relax the dijkstra
-            for (i = 0; i < mGraph[u].adj.size(); i++)
-            {
-                v   = mGraph[u].adj[i].id;                      // the ith neighbour of u
-                alt = mGraph[u].dist + mGraph[u].adj[i].prox;   // the total distance to v
-                if (alt < mGraph[v].dist)
-                {
-                    mGraph[v].dist = alt;
-                    prev[v] = u;
-                    Q.push(&mGraph[v]);
-                }
-            }
-        }
-        
-        // extract the shortest path.
-        u = end;
-        while (prev[u] != UINT32_MAX)
-        {
-            shortest_path.push_back(u);
-            u = prev[u];
-        }
-        if (shortest_path.size() > 0)
-        {
-            shortest_path.push_back(u);
-            std::reverse(shortest_path.begin(), shortest_path.end());
-        }
-        
-        // clean up + return.
-        free(prev);
-        return shortest_path;
-        //return mGraph[end].dist;
     }
 };
 

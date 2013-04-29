@@ -161,7 +161,7 @@ struct Point3
 
 struct Vector2
 {
-    Vector2 (const float x_init, const float y_init, const int type=VECTOR_UNNORMALISED) : x(x_init), y(y_init)
+    Vector2 (const float x_init, const float y_init, const int type_init=VECTOR_UNNORMALISED) : x(x_init), y(y_init), type(type_init)
     {
         if (type == VECTOR_AUTONORMALISED)
             normalise();
@@ -178,14 +178,16 @@ struct Vector2
     }
     float angleTo (const Vector2& other)
     {
-        float dot_product = this * other;
+        float dot_product = (*this) * other;
         return RADTODEG(acos(dot_product));
     }
     Vector2 operator+ (const Vector2& other)
     {
         return Vector2(x + other.x, y + other.y, type & other.type);
     }
-}
+    float x, y;
+    int type;
+};
 
 struct Vector3
 {

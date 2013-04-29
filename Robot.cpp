@@ -3,7 +3,7 @@
 
 /// @brief  Constructor. Opens and initialises the serial connection before turning on the Robot. It
 ///         starts in PASSIVE mode. See setMode() for further information.
-Robot::Robot (void) : mCurrentMode(OFF), mMoveAccumulator(0), mMoveTarget(0), mTurnAccumulator(0), mTurnTarget(0), mIsInterruptable(true), mIsIdle(true), mCurrentActionType(NONE)
+Robot::Robot (void) : mCurrentMode(OFF), mMoveAccumulator(0), mMoveTarget(0), mTurnAccumulator(0), mTurnTarget(0), mIsIdle(true)
 {
     mSI = new SerialInterface();
     mSI->start();
@@ -378,7 +378,7 @@ void Robot::updateAccumulators (int d_move, int d_turn)
         printf("move limit reached\n");
         if (mTurnAccumulator != 0)
             printf("uh oh, we somehow accumulated rotation despite actually moving (a=%d). Zeroing out.\n", mTurnAccumulator);
-        zeroTargetsAndAccumulators
+        zeroTargetsAndAccumulators();
     }
 }
 
@@ -424,7 +424,7 @@ void Robot::processMotorActions (void)
         {
             // grab the next motor action
             MotorAction next = mMotorActions.front();
-            mMotorActions.pop_front();
+            mMotorActions.pop();
             
             // load her up
             zeroTargetsAndAccumulators();
@@ -459,11 +459,11 @@ void Robot::executePathingAction (void)
         priority = LEVEL2;
     
     if (action.first_angle != 0)
-        mMotorActions.push_back(MotorAction(ROTATION,     action.first_angle,  priority));
+        mMotorActions.push(MotorAction(ROTATION,    action.first_angle,  priority));
     if (action.displacement != 0)
-        mMotorActions.push_back(MotorAction(DISPLACEMENT, action.displacement, priority));
+        mMotorActions.push(MotorAction(TRANSLATION, action.displacement, priority));
     if (action.final_angle != 0)
-        mMotorActions.push_back(MotorAction(ROTATION,     action.final_angle,  priority));
+        mMotorActions.push(MotorAction(ROTATION,    action.final_angle,  priority));
 }
 
 
@@ -472,7 +472,7 @@ void Robot::executePathingAction (void)
 void Robot::reroutePathingActions (void)
 {
     // work out where we're actually going and then clear the whole queue - we don't need any of that crap.
-    Point2i  final_destination = mPatchingActions.back().target;
+    Point2i  final_destination = mPathingActions.back().target;
     uint32_t final_destination_node = mMap.lookupPoint(final_destination);
     dropPathingActions();
     if (final_destination_node == UINT32_MAX)
@@ -482,7 +482,7 @@ void Robot::reroutePathingActions (void)
     }
     
     // Get the nearest backward node.
-    uint32_t nearest_back_node = mMap.getNearestBackwardNode(mMap.mGraph[mMap.mCurrentNode]);
+    uint32_t nearest_back_node = mMap.getNearestBackwardNode(mMap.mGraph[mMap.mCurrentNode].p);
     
     // add the pathing action from the current position to the nearest backward node
     mPathingActions.push(generateN2NPathingAction(mMap.mCurrentNode, nearest_back_node));
@@ -497,8 +497,14 @@ void Robot::reroutePathingActions (void)
 
 void Robot::dropPathingActions (void)
 {
-    mPathingActions.clear();
-    mMotorActions.clear();
+    // clear the two queues out. an annoying oversight of the STL is they have no clear function so
+    // this must be done manually (swap is used to ensure the memory is actually zeroed and prevent
+    // the queues being little divas and hanging onto their items silently).
+    std::queue<PathingAction>  emptyPathing;
+    std::queue<MotorAction>    emptyMotor;
+    std::swap(mPathingActions, emptyPathing);
+    std::swap(mMotorActions,   emptyMotor);
+    // we now having nothing to do, lovely.
     mIsIdle = true;
 }
 
@@ -618,9 +624,8 @@ void Robot::timestep (sint8_t object_avoidance, bool target_recognition, MarkerD
     // if we've got through that gauntlet it means we're chilling out safetly and have nothing to do!
     // we should probably find something to do tbh...
     if (!action_generated && mPathingActions.size() == 0 && mMotorActions.size() == 0)
-        {
-            mPathingActions.push(generateRandomPathingAction(0));
-        }
+    {
+        mPathingActions.push(generateRandomPathingAction(0));
     }
     
     // actually execute the jobs we've spent so long constructing.
@@ -706,7 +711,7 @@ PathingAction Robot::generateRandomPathingAction (int rotation_mean)
 
 PathingAction Robot::generateN2NPathingAction (const uint32_t start, const uint32_t end)
 {
-    return generateN2NPathingAction(mMap.mGraph[start], mMap.mGraph[end]);
+    return generateN2NPathingAction(mMap.mGraph[start].p, mMap.mGraph[end].p);
 }
 
 
