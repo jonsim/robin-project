@@ -142,7 +142,7 @@ int main (void)
         
 #ifdef MOVEMENT_ENABLED
         // do roboty things
-        reginald.timestep(panicStations, markerFound, markerData);
+        reginald.timestep(&vinny, panicStations, markerFound, markerData);
 /*        // check cliff sensors
         //   done automatically in safe mode
         

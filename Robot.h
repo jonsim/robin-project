@@ -9,6 +9,7 @@
 #include "Common.h"
 #include "SerialInterface.h"
 #include "GridMap.h"
+#include "Vision.h"
 #include <time.h>
 #include <queue>
 
@@ -132,7 +133,7 @@ public:
     void printChargingStatus (void) const;
     void printBatteryStatus  (void) const;
     
-    void timestep (sint8_t object_avoidance, bool target_recognition, MarkerData& target_recognition_data);
+    void timestep (Vision* vision, sint8_t object_avoidance, bool target_recognition, MarkerData& target_recognition_data);
     
 //    void updateMap (void);
     
@@ -153,7 +154,7 @@ private:
     void startNapping (int duration);
     bool nappingTimeUp (void);
     
-    void processMotorActions (void);
+    void processMotorActions (Vision* vision);
     void executePathingAction (void);
     void reroutePathingActions (void);
     void dropPathingActions (void);

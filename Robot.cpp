@@ -372,8 +372,8 @@ void Robot::updateAccumulators (int d_move, int d_turn)
         zeroTargetsAndAccumulators();
     }
     // have we finished moving?
-    else if ((mMoveTarget > 0 && mMoveAccumulator >= mMoveTarget) ||
-             (mMoveTarget < 0 && mMoveAccumulator <= mMoveTarget)   )
+    if ((mMoveTarget > 0 && mMoveAccumulator >= mMoveTarget) ||
+        (mMoveTarget < 0 && mMoveAccumulator <= mMoveTarget)   )
     {
         printf("move limit reached\n");
         if (mTurnAccumulator != 0)
@@ -412,14 +412,28 @@ bool Robot::nappingTimeUp (void)
 }
 
 
-void Robot::processMotorActions (void)
+void Robot::processMotorActions (Vision* vision)
 {
     if (mIsIdle)
     {
         // grab the next pathing action and convert it down to motor actions
-        if (mMotorActions.empty() && !mPathingActions.empty())
-            executePathingAction();
-        
+        if (mMotorActions.empty())
+        {
+            if (mCurrentAction.type == DIRECT_ORDER)
+            {
+                if (vision->checkForOccupancy())
+                {
+                    mMap.addTable(mMap.mCurrentNode);
+                    startNapping(TARGET_NAP_DURATION);
+                    return;
+                }
+            }
+            if (!mPathingActions.empty())
+            {
+                executePathingAction();
+            }
+        }
+        // not else if because executePathingAction (called above) will populate the list.
         if (!mMotorActions.empty())
         {
             // grab the next motor action
@@ -509,13 +523,15 @@ void Robot::dropPathingActions (void)
 }
 
 
-void Robot::timestep (sint8_t object_avoidance, bool target_recognition, MarkerData& target_recognition_data)
+void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_recognition, MarkerData& target_recognition_data)
 {
     static  PathingAction action;
     uint8_t bumperValues[2];
     int     next_rotation_offset = 0;
     bool    action_generated = false;
     bool    has_napped = false;
+    
+    printf("lets path\n");
     
     // bookkeeping
     mMap.updateWeights();
@@ -629,7 +645,7 @@ void Robot::timestep (sint8_t object_avoidance, bool target_recognition, MarkerD
     }
     
     // actually execute the jobs we've spent so long constructing.
-    processMotorActions();
+    processMotorActions(vision);
 }
 
 
