@@ -22,6 +22,7 @@
 #define POINT_EQUALITY_EPSILON   50  // in mm.
 #define POINT_EQUALITY_EPSILON2  (POINT_EQUALITY_EPSILON*POINT_EQUALITY_EPSILON)
 #define TABLE_WEIGHT_INCREASE_GAP 3 // table weights will be updated by 1 every x seconds.
+#define MAP_OUTPUT_FILE "/home/jon/individual_project/map_output.txt"
 
 
 
@@ -70,14 +71,128 @@ class GridMap
 {
 public:
     /// @brief  Constructor.
-    GridMap (void) : mCurrentOrientation(0), mCurrentNode(0)
-    { 
-        push_back(Point2i(0,0));  // we always start at (0,0)
+    GridMap (char* input_filename = NULL) : mCurrentOrientation(0), mCurrentNode(0)
+    {
+        if (input_filename == NULL)
+        {
+            push_back(Point2i(0,0));  // we always start at (0,0)
+        }
+        else
+        {
+            readFromFile(std::string(input_filename));
+        }
     }
     
     
     /// @brief  Deconstructor
-    ~GridMap (void) {}
+    ~GridMap (void)
+    {
+#ifdef MAP_OUTPUT_FILE
+        writeToFile(MAP_OUTPUT_FILE);
+#endif
+    }
+    
+    
+    void writeToFile (std::string& filename)
+    {
+        std::ofstream file(filename);
+        if (file.is_open())
+        {
+            for (uint32_t i = 0; i < mGraph.size(); i++)
+            {
+                file << mGraph[i].id << " " << mGraph[i].p.x << "," << mGraph[i].p.y << "\n";
+                for (uint32_t j = 0; j < mGraph[i].adj.size(); j++)
+                    file << "  " << mGraph[i].adj[j].id << " " << mGraph[i].adj[j].prox << "\n";
+            }
+            file << "TABLES\n";
+            for (uint i = 0; i < mTableNodes.size(); i++)
+                file << mTableNodes[i].first << "\n";
+            printf("Written map to file '%s'\n", filename.c_str());
+            file.close();
+        }
+        else
+        {
+            pritnf("Unable to write map to file '%d'\n", filename.c_str());
+        }
+    }
+    
+    
+    void readFromFile (std::string& filename)
+    {
+        std::ifstream file(filename);
+        std::string line;
+        
+        if (mGraph.size() != 0)
+        {
+            printf("WARNING: current map is not empty (%d elements), unable to read map from file.\n", (int) mGraph.size());
+            return;
+        }
+        if (file.is_open())
+        {
+            bool tableMode = false;
+            
+            while (file.good())
+            {
+                std::getline(file, line);
+                if (!table_mode)
+                {
+                    std::vector<std::string> split_line = split(line, ' ');
+                    if (split_line[0].empty())
+                    {
+                        if (split_line.size() < 4)
+                        {
+                            printf("ERROR: could not read map file correctly (appears to be badly formed).\n");
+                            break;
+                        }
+                        int id    = atoi(split_line[1].c_str());
+                        int adjid = atoi(split_line[2].c_str());
+                        int prox  = atoi(split_line[3].c_str());
+                        mGraph[id].adj.push_back(AdjNode(adjid, prox));
+                    }
+                    else if (split_line[0].compare("TABLES") == 0)
+                    {
+                        table_mode = true;
+                    }
+                    else
+                    {
+                        if (split_line.size() < 3)
+                        {
+                            printf("ERROR: could not read map file correctly (appears to be badly formed).\n");
+                            break;
+                        }
+                        int id = atoi(split_line[0].c_str());
+                        int x  = atoi(split_line[1].c_str());
+                        int y  = atoi(split_line[2].c_str());
+                        if (id != mGraph.size())
+                        {
+                            printf("ERROR: could not read map file correctly (appears to be out of order).\n");
+                            break;
+                        }
+                        
+                        // add the new node to the graph and update our position.
+                        mGraph.push_back(GridNode(id, Point2i(x, y)));
+                    }
+                }
+                else
+                {
+                    int table_id = atoi(line.c_str());
+                    mTableNodes.push_back(std::pair<uint32_t, uint8_t>(table_id, 0));
+                }
+            }
+            for (uint32_t i = 0; i < mGraph.size(); i++)
+            {
+                file << mGraph[i].id << " " << mGraph[i].p.x << " " << mGraph[i].p.y << "\n";
+                for (uint32_t j = 0; j < mGraph[i].adj.size(); j++)
+                    file << " " << mGraph[i].id << " " << mGraph[i].adj[j].id << " " << mGraph[i].adj[j].prox << "\n";
+            }
+            printf("Read map from file '%s'\n", filename.c_str());
+            file.close();
+        }
+        else
+        {
+            printf("Unable to read map from file '%d'\n", filename.c_str());
+        }
+    }
     
     
     /// @brief  Adds the readings supplied to the map as a new node.

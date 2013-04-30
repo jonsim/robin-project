@@ -214,5 +214,7 @@ float    euclidean_distance2 (const Point2i& p1, const Point2i& p2);
 float    randNormallyDistributed (float mu, float sigma);
 void     msleep        (const uint32_t msec);
 int      _kbhit        (void);
+std::vector<std::string>& split(const std::string& s, char delim, std::vector<std::string>& elems);
+std::vector<std::string> split(const std::string& s, char delim);
 
 #endif

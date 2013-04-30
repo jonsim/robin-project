@@ -108,7 +108,7 @@ struct MotorAction
 class Robot
 {
 public:
-    Robot (void);
+    Robot (char* map_file = NULL);
     ~Robot (void);
     
     void           getCliffValues     (uint8_t* r) const;

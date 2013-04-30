@@ -3,13 +3,17 @@
 
 /// @brief  Constructor. Opens and initialises the serial connection before turning on the Robot. It
 ///         starts in PASSIVE mode. See setMode() for further information.
-Robot::Robot (void) : mCurrentMode(OFF), mMoveAccumulator(0), mMoveTarget(0), mTurnAccumulator(0), mTurnTarget(0), mIsIdle(true)
+Robot::Robot (char* map_file) : mCurrentMode(OFF), mMoveAccumulator(0), mMoveTarget(0), mTurnAccumulator(0), mTurnTarget(0), mIsIdle(true), mMap(map_file)
 {
     mSI = new SerialInterface();
     mSI->start();
     mSI->writeByte(128u);
     mCurrentMode = PASSIVE;
     srand(time(NULL));
+    
+    // read the tachometry to zero out the sensors
+    getDistance();
+    getAngle();
 }
 
 

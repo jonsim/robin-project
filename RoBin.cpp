@@ -65,7 +65,7 @@ void moveRobot (Robot* robot, sint32_t direction)
 
 /*-------------------- MAIN FUNCTION --------------------*/
 /// @brief  Unit testing.
-int main (void)
+int main (int argc, char* argv[])
 {
     // function variables
 #if defined(DEPTH_STREAMING_ENABLED) || defined(COLOR_STREAMING_ENABLED)
@@ -79,7 +79,8 @@ int main (void)
     
     // module objects
 #ifdef MOVEMENT_ENABLED
-    Robot    reginald;
+    char* arg1 = (argc > 1) ? argv[1] : NULL;
+    Robot reginald(arg1);
 //    uint8_t  bumperValues[2];
 #endif
     Vision vinny;
