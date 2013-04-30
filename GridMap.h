@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <vector>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
 #include <queue>
 #include "Common.h"
 
@@ -71,7 +73,7 @@ class GridMap
 {
 public:
     /// @brief  Constructor.
-    GridMap (char* input_filename = NULL) : mCurrentOrientation(0), mCurrentNode(0)
+    GridMap (const char* input_filename = NULL) : mCurrentOrientation(0), mCurrentNode(0)
     {
         if (input_filename == NULL)
         {
@@ -79,7 +81,7 @@ public:
         }
         else
         {
-            readFromFile(std::string(input_filename));
+            readFromFile(input_filename);
         }
     }
     
@@ -93,33 +95,35 @@ public:
     }
     
     
-    void writeToFile (std::string& filename)
+    void writeToFile (const char* filename)
     {
-        std::ofstream file(filename);
+        std::ofstream file;
+        file.open(filename);
         if (file.is_open())
         {
             for (uint32_t i = 0; i < mGraph.size(); i++)
             {
-                file << mGraph[i].id << " " << mGraph[i].p.x << "," << mGraph[i].p.y << "\n";
+                file << mGraph[i].id << " " << mGraph[i].p.x << " " << mGraph[i].p.y << "\n";
                 for (uint32_t j = 0; j < mGraph[i].adj.size(); j++)
                     file << "  " << mGraph[i].adj[j].id << " " << mGraph[i].adj[j].prox << "\n";
             }
             file << "TABLES\n";
             for (uint i = 0; i < mTableNodes.size(); i++)
                 file << mTableNodes[i].first << "\n";
-            printf("Written map to file '%s'\n", filename.c_str());
+            printf("Written map to file '%s'\n", filename);
             file.close();
         }
         else
         {
-            pritnf("Unable to write map to file '%d'\n", filename.c_str());
+            printf("Unable to write map to file '%s'\n", filename);
         }
     }
     
     
-    void readFromFile (std::string& filename)
+    void readFromFile (const char* filename)
     {
-        std::ifstream file(filename);
+        std::ifstream file;
+        file.open(filename);
         std::string line;
         
         if (mGraph.size() != 0)
@@ -129,7 +133,7 @@ public:
         }
         if (file.is_open())
         {
-            bool tableMode = false;
+            bool table_mode = false;
             
             while (file.good())
             {
@@ -163,7 +167,7 @@ public:
                         int id = atoi(split_line[0].c_str());
                         int x  = atoi(split_line[1].c_str());
                         int y  = atoi(split_line[2].c_str());
-                        if (id != mGraph.size())
+                        if (id != (int) mGraph.size())
                         {
                             printf("ERROR: could not read map file correctly (appears to be out of order).\n");
                             break;
@@ -179,18 +183,12 @@ public:
                     mTableNodes.push_back(std::pair<uint32_t, uint8_t>(table_id, 0));
                 }
             }
-            for (uint32_t i = 0; i < mGraph.size(); i++)
-            {
-                file << mGraph[i].id << " " << mGraph[i].p.x << " " << mGraph[i].p.y << "\n";
-                for (uint32_t j = 0; j < mGraph[i].adj.size(); j++)
-                    file << " " << mGraph[i].id << " " << mGraph[i].adj[j].id << " " << mGraph[i].adj[j].prox << "\n";
-            }
-            printf("Read map from file '%s'\n", filename.c_str());
+            printf("Read map from file '%s'\n", filename);
             file.close();
         }
         else
         {
-            printf("Unable to read map from file '%d'\n", filename.c_str());
+            printf("Unable to read map from file '%s'\n", filename);
         }
     }
     
@@ -228,31 +226,40 @@ public:
     
     void addTable (uint32_t node_id)
     {
+        // check we don't already have it
+        for (uint32_t i = 0; i < mTableNodes.size(); i++)
+            if (mTableNodes[i].first == node_id)
+                return;
+        // add it
         mTableNodes.push_back(std::pair<uint32_t, uint8_t>(node_id, 0));
+        // if we're the first one start updating table weights.
         if (mTableNodes.size() == 1)
             time(&mLastWeightUpdateTime);
     }
     
     void updateWeights (void)
     {
-        int time_difference, point_increase;
-        uint32_t i = 0;
-        time_t currentTime;
-        time(&currentTime);
-        
-        // check the time elapsed since the last update
-        time_difference = (int) difftime(currentTime, mLastWeightUpdateTime);
-        if (time_difference < TABLE_WEIGHT_INCREASE_GAP)
-            return;
-        
-        // if necessary update the weights
-        point_increase = time_difference / TABLE_WEIGHT_INCREASE_GAP;
-        for (i = 0; i < mTableNodes.size(); i++)
-            if (mTableNodes[i].second < 100)
-                mTableNodes[i].second = MAX((mTableNodes[i].second + point_increase), 100);
-        
-        // if we have updated the weights, update the time at which we last did so.
-        time(&mLastWeightUpdateTime);
+        if (mTableNodes.size() > 0)
+        {
+            int time_difference, point_increase;
+            uint32_t i = 0;
+            time_t currentTime;
+            time(&currentTime);
+            
+            // check the time elapsed since the last update
+            time_difference = (int) difftime(currentTime, mLastWeightUpdateTime);
+            if (time_difference < TABLE_WEIGHT_INCREASE_GAP)
+                return;
+            
+            // if necessary update the weights
+            point_increase = time_difference / TABLE_WEIGHT_INCREASE_GAP;
+            for (i = 0; i < mTableNodes.size(); i++)
+                if (mTableNodes[i].second < 100)
+                    mTableNodes[i].second = MAX((mTableNodes[i].second + point_increase), 100);
+            
+            // if we have updated the weights, update the time at which we last did so.
+            time(&mLastWeightUpdateTime);
+        }
     }
     
     void testGraphing (void)
@@ -459,8 +466,8 @@ private:
                 // okay, we're cool - the node doesn't exist, let's make it and move on.
                 GridNode n_new(graph_size, p);
                 
-                GridNode n_old = mGraph[mCurrentNode];
-                float node_distance = euclidean_distance(n_old.p, p);
+                GridNode* n_old = &(mGraph[mCurrentNode]);
+                float node_distance = euclidean_distance(n_old->p, p);
                 
                 // add the previous node to the new node's adjacency.
                 AdjNode a_new(mCurrentNode, node_distance);
@@ -468,7 +475,7 @@ private:
 
                 // add the new node to the previous node's adjacency.
                 AdjNode a_old(graph_size,   node_distance);
-                n_old.adj.push_back(a_old);
+                n_old->adj.push_back(a_old);
                 
                 // add the new node to the graph and update our position.
                 mGraph.push_back(n_new);
@@ -478,27 +485,27 @@ private:
             {
                 // okay we've actually just moved to an existing node... lets sort this out.
                 // Note that we no longer use p, instead using the position of the nearby node.
-                GridNode n_new = mGraph[equal_node];
-                GridNode n_old = mGraph[mCurrentNode];
+                GridNode* n_new = &(mGraph[equal_node]);
+                GridNode* n_old = &(mGraph[mCurrentNode]);
                 
                 // check we're not moving to ourself (in which case we may as well exit).
                 if (equal_node == mCurrentNode)
                     return;
                 // check we're not moving along a known edge (in which case we may as well exit).
-                for (i = 0; i < n_old.adj.size(); i++)
-                    if (n_old.adj[i].id == equal_node)
+                for (i = 0; i < n_old->adj.size(); i++)
+                    if (n_old->adj[i].id == equal_node)
                         return;
                 
                 // okay, we're making a new edge but between two existing nodes... we can do this!
-                float node_distance = euclidean_distance(n_new.p, n_old.p);
+                float node_distance = euclidean_distance(n_new->p, n_old->p);
                 
                 // add the old node to the new_node's adjacency
                 AdjNode a_new(mCurrentNode, node_distance);
-                n_new.adj.push_back(a_new);
+                n_new->adj.push_back(a_new);
                 
                 // add the new node to the old node's adjacency.
                 AdjNode a_old(equal_node,   node_distance);
-                n_old.adj.push_back(a_old);
+                n_old->adj.push_back(a_old);
                 
                 // update our position.
                 mCurrentNode = equal_node;

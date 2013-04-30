@@ -225,32 +225,41 @@ sint8_t Vision::checkForObstacles (void)
     sint8_t    obstacleDetected = 0;
     
     // fill the histogram pointers appropriately.
+//    printf("  retrieving histograms\n");
     mFrameBuffer.retrieveHistograms(0,                 &newLHistogram, &newRHistogram);
-    mFrameBuffer.retrieveHistograms(FRAME_RETENTION-1, &oldLHistogram, &oldRHistogram);
+    mFrameBuffer.retrieveHistograms(FRAME_RETENTION-2, &oldLHistogram, &oldRHistogram);
+//    printf("  - retrieved nL (%x), nR (%x), oL (%x), oR (%x)\n", (uint32_t) newLHistogram, (uint32_t) newRHistogram, (uint32_t) oldLHistogram, (uint32_t) oldRHistogram);
     
     // check we're all properly initialised
     if (newLHistogram == NULL || newRHistogram == NULL || oldLHistogram == NULL || oldRHistogram == NULL)
+    {
+//        printf("  we're not ready yet!\n");
         return 0;
+    }
     
     // retrieve the ranges
+//    printf("  getting the ranges\n");
     newLHistogramError  = newLHistogram->get(0);
     newRHistogramError  = newRHistogram->get(0);
     newLHistogramRange1 = newLHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
     newLHistogramRange2 = newLHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
     newRHistogramRange1 = newRHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
     newRHistogramRange2 = newRHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
+    
     oldLHistogramRange1 = oldLHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
     oldLHistogramRange2 = oldLHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
     oldRHistogramRange1 = oldRHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
     oldRHistogramRange2 = oldRHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
     
     // STATIC THREAT DETECTION
+//    printf("  static threat detection\n");
     if (newLHistogramError > OBJECT_AVOIDANCE_ERROR_THRESHOLD)   // left
         obstacleDetected = -1;
     if (newRHistogramError > OBJECT_AVOIDANCE_ERROR_THRESHOLD)   // right
         obstacleDetected = (obstacleDetected == -1) ? 2 :  1;
     
     // DYNAMIC THREAT DETECTION
+//    printf("  dynamic threat detection\n");
 /*    printf("nL: %d,%d. oL: %d,%d. nR: %d,%d. oR: %d,%d.\n", newLHistogramRange1, newLHistogramRange2,
                                                             oldLHistogramRange1, oldLHistogramRange2, 
                                                             newRHistogramRange1, newRHistogramRange2,
@@ -413,7 +422,7 @@ void Vision::loadMarkerCascade (void)
     int retVal;
     retVal = mMarkerCascade.load(TARGET_RECOGNITION_CASCADE_PATH);
     
-    if (!retVal)
+    if (retVal == 0)
     {
         perror("MarkerCascade load");
         exit(EXIT_FAILURE);

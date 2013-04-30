@@ -129,8 +129,8 @@ struct Point2i
     }
     Point2i  (const Point2i& p_old, const int displacement, const int angle)
     {
-        x = p_old.x + ((int) (displacement * sin(DEGTORAD(angle))));
-        y = p_old.y + ((int) (displacement * cos(DEGTORAD(angle))));
+        x = p_old.x + ((int) (((float) displacement) * sin(DEGTORAD((float) angle))));
+        y = p_old.y + ((int) (((float) displacement) * cos(DEGTORAD((float) angle))));
     }
     ~Point2i (void) {}
     Point2i operator+ (const Point2i& other)

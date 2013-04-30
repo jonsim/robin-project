@@ -147,10 +147,14 @@ public:
     {
         uint16_t i;
         uint32_t accumulator = 0;
-
+        
+//        printf("    getting histogram (%08x) range %d-%d (max=%d)\n", (unsigned int) this, (int) starting_value, (int) ending_value, (int) mMaxValue);
+        
         ending_value = MIN(ending_value, mMaxValue);
+        
         for (i = starting_value; i <= ending_value; i++)
             accumulator += mHist[i];
+//        printf("    - done\n");
         return accumulator;
     }
     

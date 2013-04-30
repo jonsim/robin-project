@@ -18,12 +18,15 @@
 // pathing defines
 #define PATHING_MARKER_STOPPING_DISTANCE  800 // mm. the distance to stop away from markers.
 #define PATHING_MAX_MOVE_DISTANCE        2000 // mm.
-#define PATHING_ANGULAR_STD_DEV            20 // degrees.
-#define PATHING_NAP_DURATION                2 // the amount of time, in seconds, to wait for scary things to go away.
-#define TARGET_NAP_DURATION                10 // the amount of time, in seconds, to wait at tables.
+#define PATHING_ANGULAR_STD_DEV            40 // degrees.
+#define PATHING_NAP_DURATION                1 // the amount of time, in seconds, to wait for scary things to go away.
+#define TARGET_NAP_DURATION                 3 // the amount of time, in seconds, to wait at tables.
 #define ROBOT_MOVE_SPEED                  200 // mm/s
 #define ROBOT_TURN_SPEED                  200 // mm/s
 #define PATHING_MAX_PATHING_ACTIONS        50
+#define WHEEL_MOTOR_EMULATION
+#define WHEEL_MOTOR_EMULATOR_DISTANCE      50
+#define WHEEL_MOTOR_EMULATOR_ANGLE          5
 
 enum RobotMode
 {
@@ -38,7 +41,8 @@ enum PathingType
     RANDOM,
     GREEDY_NODE,
     GREEDY_TABLE,
-    DIRECT_ORDER
+    DIRECT_ORDER,
+    NONE
 };
 enum ActionPriority
 {
@@ -108,7 +112,7 @@ struct MotorAction
 class Robot
 {
 public:
-    Robot (char* map_file = NULL);
+    Robot (const char* map_file = NULL);
     ~Robot (void);
     
     void           getCliffValues     (uint8_t* r) const;

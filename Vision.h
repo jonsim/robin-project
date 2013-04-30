@@ -64,7 +64,7 @@
 // object avoidance defines
 // values for half frame 640x480
 #define OBJECT_AVOIDANCE_ERROR_THRESHOLD 80000 // this many readings in the error range (~0-500 mm) will cause instant panic.
-#define OBJECT_AVOIDANCE_PANIC_THRESHOLD  4000 // this many readings suddenly transitioning from range1 to range2 will cause panic.
+#define OBJECT_AVOIDANCE_PANIC_THRESHOLD  2500 // this many readings suddenly transitioning from range1 to range2 will cause panic.
 #define OBJECT_AVOIDANCE_RANGE1_START   500 // mm
 #define OBJECT_AVOIDANCE_RANGE1_END     699 // mm
 #define OBJECT_AVOIDANCE_RANGE2_START   700 // mm
@@ -88,7 +88,7 @@
 #define OCCUPANCY_ANALYSIS_Y_END         360 // the number of pixels cropped from the bottom of the image before OA starts. 25% of the height.
 #define OCCUPANCY_ANALYSIS_RANGE_START   800 // mm. the start of the range to look for legs in.
 #define OCCUPANCY_ANALYSIS_RANGE_END    1600 // mm. the end   of the range to look for legs in.
-#define OCCUPANCY_ANALYSIS_THRESHOLD   20000 // pixels. this many pixels in the given range will result in 'occupancy' being detected.
+#define OCCUPANCY_ANALYSIS_THRESHOLD   50000 // pixels. this many pixels in the given range will result in 'occupancy' being detected. Out of 122800.
 
 
 

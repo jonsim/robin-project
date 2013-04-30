@@ -3,7 +3,7 @@
 
 /// @brief  Constructor. Opens and initialises the serial connection before turning on the Robot. It
 ///         starts in PASSIVE mode. See setMode() for further information.
-Robot::Robot (char* map_file) : mCurrentMode(OFF), mMoveAccumulator(0), mMoveTarget(0), mTurnAccumulator(0), mTurnTarget(0), mIsIdle(true), mMap(map_file)
+Robot::Robot (const char* map_file) : mCurrentMode(OFF), mMap(map_file), mMoveAccumulator(0), mMoveTarget(0), mTurnAccumulator(0), mTurnTarget(0), mIsNapping(false), mIsIdle(true)
 {
     mSI = new SerialInterface();
     mSI->start();
@@ -142,6 +142,7 @@ const uint16_t Robot::getWallSignal (void) const
 /// @return The distance travelled. Range: -32768 - 32767.
 const sint16_t Robot::getDistance (void) const
 {
+#ifndef WHEEL_MOTOR_EMULATION
     CHECK_ROBOTMODE(PASSIVE);
     uint8_t command[2] = {142u, 19u};
     uint8_t response[2];
@@ -150,6 +151,13 @@ const sint16_t Robot::getDistance (void) const
     mSI->readBytes(response, sizeof(response));
     
     return make_sint16_t(response[0], response[1]);
+#else
+    if (mMoveTarget < 0)
+        return -WHEEL_MOTOR_EMULATOR_DISTANCE;
+    if (mMoveTarget > 0)
+        return WHEEL_MOTOR_EMULATOR_DISTANCE;
+    return 0;
+#endif
 }
 
 
@@ -159,6 +167,7 @@ const sint16_t Robot::getDistance (void) const
 /// @return The angle turned. Range: -32768 - 32767.
 const sint16_t Robot::getAngle (void) const
 {
+#ifndef WHEEL_MOTOR_EMULATION
     CHECK_ROBOTMODE(PASSIVE);
     uint8_t command[2] = {142u, 20u};
     uint8_t response[2];
@@ -167,6 +176,13 @@ const sint16_t Robot::getAngle (void) const
     mSI->readBytes(response, sizeof(response));
     
     return make_sint16_t(response[0], response[1]);
+#else
+    if (mTurnTarget < 0)
+        return -WHEEL_MOTOR_EMULATOR_ANGLE;
+    if (mTurnTarget > 0)
+        return WHEEL_MOTOR_EMULATOR_ANGLE;
+    return 0;
+#endif
 }
 
 
@@ -193,6 +209,7 @@ void Robot::setMode (const RobotMode rm)
 /// @param  rVel  The velocity of the right wheel in mm/s. Range = -500 - 500.
 void Robot::setSpeed (const sint16_t lVel, const sint16_t rVel)
 {
+#ifndef WHEEL_MOTOR_EMULATION
     static sint16_t curr_lVel=0, curr_rVel=0;
     CHECK_ROBOTMODE(SAFE);
     
@@ -205,6 +222,7 @@ void Robot::setSpeed (const sint16_t lVel, const sint16_t rVel)
                               (uint8_t) (rVel >> 8), (uint8_t) (rVel & 0xFF) };
         mSI->writeBytes(command, sizeof(command));
     }
+#endif
 }
 
 
@@ -213,6 +231,7 @@ void Robot::setSpeed (const sint16_t lVel, const sint16_t rVel)
 ///             anti-clockwise rotation.
 void Robot::targetRotation (const sint16_t dc)
 {
+#ifndef WHEEL_MOTOR_EMULATION
     CHECK_ROBOTMODE(SAFE);
     uint16_t ndc = -dc;
     
@@ -224,7 +243,7 @@ void Robot::targetRotation (const sint16_t dc)
     mSI->writeBytes(command_rotate, sizeof(command_rotate));
     mSI->writeBytes(command_wait,   sizeof(command_wait  ));
     mSI->writeByte(153u);
-    
+#endif
 }
 
 
@@ -257,20 +276,24 @@ void Robot::setLEDs (const bool playLED, const bool advanceLED)
 ///                      9 - Banjo - Plays a chord (selected by the bumper) from the cliff sensors.
 void Robot::startDemo (const uint8_t demo_number)
 {
+#ifndef WHEEL_MOTOR_EMULATION
     CHECK_ROBOTMODE(PASSIVE);
     uint8_t command[2] = {137u, demo_number};
     
     mSI->writeBytes(command, sizeof(command));
+#endif
 }
 
 
 /// @brief  Halts the currently running demo. Does nothing if there is not a demo currently running.
 void Robot::stopDemo (void)
 {
+#ifndef WHEEL_MOTOR_EMULATION
     CHECK_ROBOTMODE(PASSIVE);
     uint8_t command[2] = {137u, 255u};
     
     mSI->writeBytes(command, sizeof(command));
+#endif
 }
 
 
@@ -351,6 +374,7 @@ void Robot::updateMap (void)
 
 void Robot::updateTargets (int new_move, int new_turn)
 {
+    printf("-------- updating targets (%d, %d) --------\n", new_move, new_turn);
     if (new_move && new_turn)
         printf("WARNING: Tried to update targets with two non-zero values (n_move=%d, n_turn=%d)\n", new_move, new_turn);
     mMoveTarget = new_move;
@@ -370,23 +394,24 @@ void Robot::updateAccumulators (int d_move, int d_turn)
     if ((mTurnTarget > 0 && mTurnAccumulator >= mTurnTarget) ||
         (mTurnTarget < 0 && mTurnAccumulator <= mTurnTarget)   )
     {
-        printf("turn limit reached\n");
+        printf("  turn limit reached\n");
         if (mMoveAccumulator != 0)
-            printf("uh oh, we somehow accumulated movement despite actually rotating (a=%d). Zeroing out.\n", mMoveAccumulator);
+            printf("WARNING: we somehow accumulated movement despite actually rotating (a=%d). Zeroing out.\n", mMoveAccumulator);
         zeroTargetsAndAccumulators();
     }
     // have we finished moving?
     if ((mMoveTarget > 0 && mMoveAccumulator >= mMoveTarget) ||
         (mMoveTarget < 0 && mMoveAccumulator <= mMoveTarget)   )
     {
-        printf("move limit reached\n");
+        printf("  move limit reached\n");
         if (mTurnAccumulator != 0)
-            printf("uh oh, we somehow accumulated rotation despite actually moving (a=%d). Zeroing out.\n", mTurnAccumulator);
+            printf("WARNING: we somehow accumulated rotation despite actually moving (a=%d). Zeroing out.\n", mTurnAccumulator);
         zeroTargetsAndAccumulators();
     }
 }
 
 
+/// @brief  Stop right now, thank you very much. We need somebody with a human touch.
 void Robot::zeroTargetsAndAccumulators (void)
 {
     if (!(mMoveAccumulator == 0 && mTurnAccumulator == 0))
@@ -412,6 +437,7 @@ bool Robot::nappingTimeUp (void)
     time_t now;
     time(&now);
     int current_nap_duration = (int) difftime(now, mNapStarted);
+    printf("    nap duration = %d / %d\n", current_nap_duration, mNapDuration);
     return (current_nap_duration >= mNapDuration);
 }
 
@@ -429,6 +455,7 @@ void Robot::processMotorActions (Vision* vision)
                 {
                     mMap.addTable(mMap.mCurrentNode);
                     startNapping(TARGET_NAP_DURATION);
+                    mCurrentAction.type = NONE;
                     return;
                 }
             }
@@ -468,20 +495,19 @@ void Robot::processMotorActions (Vision* vision)
 
 void Robot::executePathingAction (void)
 {
-    PathingAction action = mPathingActions.front();
+    mCurrentAction = mPathingActions.front();
     mPathingActions.pop();
-    mCurrentAction = action;
     
     ActionPriority priority = LEVEL1;
-    if (action.type == GREEDY_TABLE)
+    if (mCurrentAction.type == GREEDY_TABLE)
         priority = LEVEL2;
     
-    if (action.first_angle != 0)
-        mMotorActions.push(MotorAction(ROTATION,    action.first_angle,  priority));
-    if (action.displacement != 0)
-        mMotorActions.push(MotorAction(TRANSLATION, action.displacement, priority));
-    if (action.final_angle != 0)
-        mMotorActions.push(MotorAction(ROTATION,    action.final_angle,  priority));
+    if (mCurrentAction.first_angle != 0)
+        mMotorActions.push(MotorAction(ROTATION,    mCurrentAction.first_angle,  priority));
+    if (mCurrentAction.displacement != 0)
+        mMotorActions.push(MotorAction(TRANSLATION, mCurrentAction.displacement, priority));
+    if (mCurrentAction.final_angle != 0)
+        mMotorActions.push(MotorAction(ROTATION,    mCurrentAction.final_angle,  priority));
 }
 
 
@@ -534,8 +560,9 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     int     next_rotation_offset = 0;
     bool    action_generated = false;
     bool    has_napped = false;
+    static int nap_cooldown = 0;
     
-    printf("lets path\n");
+    printf("  lets path\n");
     
     // bookkeeping
     mMap.updateWeights();
@@ -543,42 +570,47 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     // handle napping and exit straight out if we are currently napping.
     if (mIsNapping)
     {
-        printf("napping\n");
+        printf("  napping\n");
         if (!nappingTimeUp())
             return;
         mIsNapping = false;
         has_napped = true;
+        nap_cooldown = 25;
+    }
+    else if (nap_cooldown > 0)
+    {
+        nap_cooldown--;
     }
     
     // update the accumulators
-    const sint16_t latestDistance = getDistance();
-    const sint16_t latestAngle = getAngle();
-    printf("updating accumulators (%d, %d)\n", (int) latestDistance, (int) latestAngle);
+    const int latestDistance = (int) getDistance();
+    const int latestAngle    = (int) getAngle();
+    printf("  updating accumulators [(%d+%d)/%d mm, (%d+%d)/%d deg]\n", latestDistance, mMoveAccumulator, mMoveTarget, latestAngle, mTurnAccumulator, mTurnTarget);
     updateAccumulators(latestDistance, latestAngle);
     
     // check bumpers. stuff touching the bumpers = immediate problem which stops for no-one.
     if (!action_generated)
     {
         getBumperValues(bumperValues);
-        if ((bumperValues[0] || bumperValues[1]) && !has_napped)
+        if ((bumperValues[0] || bumperValues[1]) && !has_napped && nap_cooldown == 0)
         {
-            printf("EW SOMETHING ON THE BUMPERS. sleeping\n");
+            printf("  EW SOMETHING ON THE BUMPERS. sleeping\n");
             startNapping(PATHING_NAP_DURATION);
             return;
         }
         else if ((bumperValues[0] || bumperValues[1]) && has_napped)
         {
-            printf("EW SOMETHING STILL ON THE BUMPERS HAVING SLEPT.\n");
+            printf("  EW SOMETHING STILL ON THE BUMPERS HAVING SLEPT.\n");
             zeroTargetsAndAccumulators();
             
             if (mCurrentAction.type == GREEDY_TABLE)
             {
-                printf("  rerouting\n");
+                printf("    rerouting\n");
                 reroutePathingActions();
             }
             else
             {
-                printf("  dropping\n");
+                printf("    dropping\n");
                 dropPathingActions();
                 
                 if (bumperValues[0] && !bumperValues[1])        // just the left bumper (so rotate right).
@@ -599,26 +631,26 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     {
         if (object_avoidance && !has_napped)
         {
-            printf("PANICING FROM THE CAMERA. sleeping\n");
+            printf("  PANICKING FROM THE CAMERA. sleeping\n");
             // we've seen something freaky - wait for 1s and see if it's still there.
             startNapping(PATHING_NAP_DURATION);
             return;
         }
         else if (object_avoidance && has_napped)
         {
-            printf("STILL PANICING FROM THE CAMERA HAVING SLEPT\n");
+            printf("  STILL PANICKING FROM THE CAMERA HAVING SLEPT\n");
             // okay now we've had a little snooze, but there's still something freaky as shit out there.
             // TAKE EVASIVE ACTION.
             zeroTargetsAndAccumulators();
             
             if (mCurrentAction.type == GREEDY_TABLE)
             {
-                printf("  rerouting\n");
+                printf("    rerouting\n");
                 reroutePathingActions();
             }
             else
             {
-                printf("  dropping\n");
+                printf("    dropping\n");
                 dropPathingActions();
                 
                 if (object_avoidance == -1)                     // just something scary on the left, turn right.
@@ -639,10 +671,10 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     {
         if (target_recognition)
         {
-            printf("marker seen!\n");
+            printf("  marker seen!\n");
             if (mCurrentAction.type != GREEDY_TABLE || (mCurrentAction.type == GREEDY_TABLE && mPathingActions.size() < 1))
             {
-                printf("  lets go!\n");
+                printf("  - lets go!\n");
                 zeroTargetsAndAccumulators();
                 dropPathingActions();
                 
@@ -650,37 +682,53 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
                 
                 action_generated = true;
             }
+            else
+            {
+                printf("  - nvm\n");
+            }
         }
     }
     
     // if we've got through that gauntlet it means we're chilling out safetly and have nothing to do!
     // we should probably find something to do tbh...
-    if (!action_generated && mPathingActions.size() == 0 && mMotorActions.size() == 0)
+//    if (!action_generated && mPathingActions.size() == 0 && mMotorActions.size() == 0)
+    if (!action_generated && mIsIdle)
     {
-        printf("nothing better to do, lets random it up\n");
-        mPathingActions.push(generateRandomPathingAction(0));
+        printf("  nothing better to do, lets random it up\n");
+        PathingAction action = generateRandomPathingAction(0);
+        printf("  - type = %d, target = (%d,%d) = %d deg -> %d mm -> %d deg\n", (int) action.type, action.target.x, action.target.y, action.first_angle, action.displacement, action.final_angle);
+        mPathingActions.push(action);
     }
     
     // actually execute the jobs we've spent so long constructing.
-    printf("executing motor actions\n");
+    printf("  executing motor actions\n");
     processMotorActions(vision);
 }
 
 
 PathingType Robot::generateRandomPathingType (void)
 {
-    float table_weights_sum = (float) mMap.tableWeightsSum();
-    float table_count       = (float) mMap.mTableNodes.size();
-    float P_movement_random = 1.0 - (1.0 / table_count);
-    float P_movement_table  = table_weights_sum / (table_count * 100.0);
-    float rand1 = ((float) rand()) / ((float) RAND_MAX);
-    float rand2 = ((float) rand()) / ((float) RAND_MAX);
+    float map_size    = (float) mMap.mGraph.size();
+    float table_count = (float) mMap.mTableNodes.size();
     
-    if (rand1 < P_movement_random)
-        return RANDOM;
-    else if (rand2 < P_movement_table)
+    float P_exploit = (table_count < 1) ? 0 : (((float) mMap.tableWeightsSum()) / (table_count * 100.0)) * (1 - (1.0 / table_count+1));
+    float P_movement_node = 0.1 * (1 - (1.0 / map_size+1));
+    
+//    float P_movement_table = (1 - (1.0 / (mMap.mGraph.size()+1))) * 0.5;
+    float rand1 = ((float) rand()) / ((float) RAND_MAX);
+    
+    if (rand1 > P_exploit)
+    {
+        float rand2 = ((float) rand()) / ((float) RAND_MAX);
+        if (rand2 < P_movement_node)
+            return GREEDY_NODE;
+        else
+            return RANDOM;
+    }
+    else
+    {
         return GREEDY_TABLE;
-    return GREEDY_NODE;
+    }
 }
 
 

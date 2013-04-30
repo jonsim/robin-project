@@ -10,9 +10,9 @@
 #include "TCPInterface.h"
 
 #define MOVEMENT_ENABLED
-#define ATOMIC_TURN_AMOUNT  10 // FPS delay
-#define MOVE_SPEED         200 // mm/s
-#define TURN_SPEED         200 // mm/s
+//#define ATOMIC_TURN_AMOUNT  10 // FPS delay
+//#define MOVE_SPEED         200 // mm/s
+//#define TURN_SPEED         200 // mm/s
 
 
 
@@ -72,9 +72,10 @@ int main (int argc, char* argv[])
     bool_t   clientConnected = false;
 #endif
 //    sint32_t turnCounter = 0;
-    uint32_t frameCounter = 0;
+    uint32_t frameCounter  = 0;
     sint8_t  panicStations = 0;
-    bool     markerFound;
+    bool     markerFound   = false;
+    bool     retestMarker  = false;
     MarkerData markerData;
     
     // module objects
@@ -93,25 +94,34 @@ int main (int argc, char* argv[])
     reginald.setMode(SAFE);
 #endif
     
-    printf("starting camera loop...\n");
+    printf("Starting camera loop.\n");
     while (1)
     {
         // First check for exit conditions.
         if (_kbhit())
+        {
+            printf("\nWhoops the keyboard got hit, exitting...\n");
             break;
+        }
         
         // Check for clients trying to connect. This currently blocks but it could not.
 #if defined(DEPTH_STREAMING_ENABLED) || defined(COLOR_STREAMING_ENABLED)
         if (!clientConnected)
+        {
+            printf("  waiting for client connection...\n");
             clientConnected = tim.checkForClients();
+        }
 #endif
         
         // Sample the camera data
+//        printf("capturing frame\n");
         vinny.captureFrame();
         frameCounter = vinny.getFrameID();
+        printf("captured frame %d\n", frameCounter);
         
         // Robot behaviour
         // Check the camera data for things that will make us panic
+        printf("checking for obstacles\n");
         panicStations = vinny.checkForObstacles();
 /*        if (panicStations > 0 && !turnCounter)
             turnCounter =  ATOMIC_TURN_AMOUNT;
@@ -119,9 +129,13 @@ int main (int argc, char* argv[])
             turnCounter = -ATOMIC_TURN_AMOUNT;*/
         
         // Check the camera data for sexy markers.
-        if (frameCounter % TARGET_RECOGNITION_RUN_FREQUENCY == 0)
+        markerFound = false;
+        if ((frameCounter % TARGET_RECOGNITION_RUN_FREQUENCY == 0) || retestMarker)
         {
+            printf("checking for markers\n");
             markerFound = vinny.checkForMarkers(&markerData);
+            retestMarker = markerFound && !retestMarker;
+            
             if (markerFound)        // TODO << delete this guy
             {
                 printf(":O a marker @ %.0f mm\n", markerData.position.z);
@@ -136,14 +150,16 @@ int main (int argc, char* argv[])
                 float theta = RADTODEG(atan(x_pp / z_pp));
                 
                 printf("h_d = %.1f, theta = %.1f\n", h_d, theta);
-                
-                
+            }
+            else
+            {
+                printf("none found :(\n");
             }
         }
         
 #ifdef MOVEMENT_ENABLED
         // do roboty things
-        reginald.timestep(&vinny, panicStations, markerFound, markerData);
+        reginald.timestep(&vinny, panicStations, markerFound && !retestMarker, markerData);
 /*        // check cliff sensors
         //   done automatically in safe mode
         
@@ -173,8 +189,8 @@ int main (int argc, char* argv[])
 #endif
         
         // Print stats
-        printf("FPS: %.1f \tpanicStations: %d \r", vinny.getFPS(), panicStations);
-        fflush(stdout);
+        printf("FPS: %.1f \tpanicStations: %d \n", vinny.getFPS(), panicStations);
+//        fflush(stdout);
         
         // If there's a client connected send the depth data to them.
 #if defined(DEPTH_STREAMING_ENABLED) || defined(COLOR_STREAMING_ENABLED)
@@ -195,7 +211,7 @@ int main (int argc, char* argv[])
     }
 //    vinny.compressFrameToDisk("depthFrame.png");
     
-    printf("\nExitting.\n");
+    printf("Exitting.\n");
     
     return 0;
 }
