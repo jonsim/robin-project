@@ -539,6 +539,7 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     // handle napping and exit straight out if we are currently napping.
     if (mIsNapping)
     {
+        printf("napping\n");
         if (!nappingTimeUp())
             return;
         mIsNapping = false;
@@ -548,6 +549,7 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     // update the accumulators
     const sint16_t latestDistance = getDistance();
     const sint16_t latestAngle = getAngle();
+    printf("updating accumulators (%d, %d)\n", (int) latestDistance, (int) latestAngle);
     updateAccumulators(latestDistance, latestAngle);
     
     // check bumpers. stuff touching the bumpers = immediate problem which stops for no-one.
@@ -556,19 +558,23 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
         getBumperValues(bumperValues);
         if ((bumperValues[0] || bumperValues[1]) && !has_napped)
         {
+            printf("EW SOMETHING ON THE BUMPERS. sleeping\n");
             startNapping(PATHING_NAP_DURATION);
             return;
         }
         else if ((bumperValues[0] || bumperValues[1]) && has_napped)
         {
+            printf("EW SOMETHING STILL ON THE BUMPERS HAVING SLEPT.\n");
             zeroTargetsAndAccumulators();
             
             if (mCurrentAction.type == GREEDY_TABLE)
             {
+                printf("  rerouting\n");
                 reroutePathingActions();
             }
             else
             {
+                printf("  dropping\n");
                 dropPathingActions();
                 
                 if (bumperValues[0] && !bumperValues[1])        // just the left bumper (so rotate right).
@@ -589,22 +595,26 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     {
         if (object_avoidance && !has_napped)
         {
+            printf("PANICING FROM THE CAMERA. sleeping\n");
             // we've seen something freaky - wait for 1s and see if it's still there.
             startNapping(PATHING_NAP_DURATION);
             return;
         }
         else if (object_avoidance && has_napped)
         {
+            printf("STILL PANICING FROM THE CAMERA HAVING SLEPT\n");
             // okay now we've had a little snooze, but there's still something freaky as shit out there.
             // TAKE EVASIVE ACTION.
             zeroTargetsAndAccumulators();
             
             if (mCurrentAction.type == GREEDY_TABLE)
             {
+                printf("  rerouting\n");
                 reroutePathingActions();
             }
             else
             {
+                printf("  dropping\n");
                 dropPathingActions();
                 
                 if (object_avoidance == -1)                     // just something scary on the left, turn right.
@@ -625,8 +635,10 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     {
         if (target_recognition)
         {
+            printf("marker seen!\n");
             if (mCurrentAction.type != GREEDY_TABLE || (mCurrentAction.type == GREEDY_TABLE && mPathingActions.size() < 1))
             {
+                printf("  lets go!\n");
                 zeroTargetsAndAccumulators();
                 dropPathingActions();
                 
@@ -641,10 +653,12 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     // we should probably find something to do tbh...
     if (!action_generated && mPathingActions.size() == 0 && mMotorActions.size() == 0)
     {
+        printf("nothing better to do, lets random it up\n");
         mPathingActions.push(generateRandomPathingAction(0));
     }
     
     // actually execute the jobs we've spent so long constructing.
+    printf("executing motor actions\n");
     processMotorActions(vision);
 }
 
