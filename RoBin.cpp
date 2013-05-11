@@ -117,12 +117,16 @@ int main (int argc, char* argv[])
 //        printf("capturing frame\n");
         vinny.captureFrame();
         frameCounter = vinny.getFrameID();
+#ifdef VERY_VERBOSE_PRINTOUTS
         printf("captured frame %d\n", frameCounter);
+#endif
         
         // Robot behaviour
         // Check the camera data for things that will make us panic
+#ifdef VERY_VERBOSE_PRINTOUTS
         printf("checking for obstacles\n");
-        panicStations = vinny.checkForObstacles();
+#endif
+        panicStations = vinny.checkForObstacles(reginald.isTurning());
 /*        if (panicStations > 0 && !turnCounter)
             turnCounter =  ATOMIC_TURN_AMOUNT;
         else if (panicStations < 0 && !turnCounter)
@@ -132,13 +136,19 @@ int main (int argc, char* argv[])
         markerFound = false;
         if ((frameCounter % TARGET_RECOGNITION_RUN_FREQUENCY == 0) || retestMarker)
         {
-            printf("checking for markers\n");
+#ifdef VERBOSE_PRINTOUTS
+            if (retestMarker)
+                printf("retesting for markers\n");
+            else
+                printf("checking for markers\n");
+#endif
             markerFound = vinny.checkForMarkers(&markerData);
-            retestMarker = markerFound && !retestMarker;
+//            retestMarker = markerFound && !retestMarker;
             
+#ifdef VERBOSE_PRINTOUTS
             if (markerFound)        // TODO << delete this guy
             {
-                printf(":O a marker @ %.0f mm\n", markerData.position.z);
+                printf("  Found @ %.0f mm\n", markerData.position.z);
                 
                 float z_p = PATHING_MARKER_STOPPING_DISTANCE * cos(-DEGTORAD(markerData.orientation));
                 float x_p = PATHING_MARKER_STOPPING_DISTANCE * sin(-DEGTORAD(markerData.orientation));
@@ -149,12 +159,13 @@ int main (int argc, char* argv[])
                 float h_d = sqrt((x_pp * x_pp) + (z_pp * z_pp));
                 float theta = RADTODEG(atan(x_pp / z_pp));
                 
-                printf("h_d = %.1f, theta = %.1f\n", h_d, theta);
+                printf("    h_d = %.1f, theta = %.1f\n", h_d, theta);
             }
             else
             {
-                printf("none found :(\n");
+                printf("  none found :(\n");
             }
+#endif
         }
         
 #ifdef MOVEMENT_ENABLED
@@ -189,7 +200,9 @@ int main (int argc, char* argv[])
 #endif
         
         // Print stats
+#ifdef VERY_VERBOSE_PRINTOUTS
         printf("FPS: %.1f \tpanicStations: %d \n", vinny.getFPS(), panicStations);
+#endif
 //        fflush(stdout);
         
         // If there's a client connected send the depth data to them.

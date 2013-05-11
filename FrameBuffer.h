@@ -456,6 +456,12 @@ public:
 
         return (((dX * dX) + (dY * dY) + (dZ * dZ)) < threshold2);
     }
+    
+    
+    void purge (void)
+    {
+        lead_in_count = retention;
+    }
 
     
     const uint16_t output_xres;         ///< The x-resolution of the stored (or 'output') frames.

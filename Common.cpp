@@ -16,7 +16,9 @@ uint16_t make_uint16_t (const uint8_t bh, const uint8_t bl)
 
 sint16_t make_sint16_t (const uint8_t bh, const uint8_t bl)
 {
-    sint16_t r = ((bh << 8) + bl) - 0xFFFF;
+//    sint16_t r = ((bh << 8) + bl) - 0xFFFF;
+    sint16_t r = bl + ((bh & 0x7f) << 8) - ((bh & 0x80) << 8);
+//    printf("bh=%x, bl = %x, r = %x, %d\n", bh, bl, r, r);
     return r;
 }
 

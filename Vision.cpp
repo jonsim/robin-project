@@ -84,6 +84,13 @@ void Vision::initialiseCamera (void)
     retVal = xnFPSInit(&mXnFPS, 180);
     CHECK_RETURN_XN(retVal, "FPS Init");
     
+    // print some stuffs
+    double pixel_size;
+    XnUInt64 focal_length;
+    mDepthGenerator.GetRealProperty("ZPPS", pixel_size);
+    mDepthGenerator.GetIntProperty( "ZPD",  focal_length);
+    printf("ZPPS=%f, ZPD=%d\n", pixel_size, focal_length);
+    
     printf("done.\n");
 }
 
@@ -212,7 +219,7 @@ uint32_t Vision::getFrameID (void)
 ///         of 0 suggests we're all cool, a return of 1 means there is legit grounds for panic on
 ///         the right hand side and a return of -1 means we need to worry about something on our left.
 ///         in the case that there is something scary on both sides a value of 2 will be returned.
-sint8_t Vision::checkForObstacles (void)
+sint8_t Vision::checkForObstacles (bool dynamic_check)
 {
     Histogram* newLHistogram;
     Histogram* newRHistogram;
@@ -241,15 +248,6 @@ sint8_t Vision::checkForObstacles (void)
 //    printf("  getting the ranges\n");
     newLHistogramError  = newLHistogram->get(0);
     newRHistogramError  = newRHistogram->get(0);
-    newLHistogramRange1 = newLHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
-    newLHistogramRange2 = newLHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
-    newRHistogramRange1 = newRHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
-    newRHistogramRange2 = newRHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
-    
-    oldLHistogramRange1 = oldLHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
-    oldLHistogramRange2 = oldLHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
-    oldRHistogramRange1 = oldRHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
-    oldRHistogramRange2 = oldRHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
     
     // STATIC THREAT DETECTION
 //    printf("  static threat detection\n");
@@ -257,6 +255,10 @@ sint8_t Vision::checkForObstacles (void)
         obstacleDetected = -1;
     if (newRHistogramError > OBJECT_AVOIDANCE_ERROR_THRESHOLD)   // right
         obstacleDetected = (obstacleDetected == -1) ? 2 :  1;
+#ifdef VERBOSE_PRINTOUTS
+    if (obstacleDetected)
+        printf("static error\n");
+#endif
     
     // DYNAMIC THREAT DETECTION
 //    printf("  dynamic threat detection\n");
@@ -264,12 +266,39 @@ sint8_t Vision::checkForObstacles (void)
                                                             oldLHistogramRange1, oldLHistogramRange2, 
                                                             newRHistogramRange1, newRHistogramRange2,
                                                             oldRHistogramRange1, oldRHistogramRange2 );*/
-    if ((newLHistogramRange2 < (oldLHistogramRange2 - OBJECT_AVOIDANCE_PANIC_THRESHOLD)) &&     // left
-        (newLHistogramRange1 > (oldLHistogramRange1 + OBJECT_AVOIDANCE_PANIC_THRESHOLD))    )
-        obstacleDetected = (obstacleDetected ==  1) ? 2 : -1;
-    if ((newRHistogramRange2 < (oldRHistogramRange2 - OBJECT_AVOIDANCE_PANIC_THRESHOLD)) &&     // right
-        (newRHistogramRange1 > (oldRHistogramRange1 + OBJECT_AVOIDANCE_PANIC_THRESHOLD))    )
-        obstacleDetected = (obstacleDetected == -1) ? 2 :  1;
+    if (dynamic_check)
+    {
+        newLHistogramRange1 = newLHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
+        newLHistogramRange2 = newLHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
+        newRHistogramRange1 = newRHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
+        newRHistogramRange2 = newRHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
+        
+        oldLHistogramRange1 = oldLHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
+        oldLHistogramRange2 = oldLHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
+        oldRHistogramRange1 = oldRHistogram->getRange(OBJECT_AVOIDANCE_RANGE1_START, OBJECT_AVOIDANCE_RANGE1_END);
+        oldRHistogramRange2 = oldRHistogram->getRange(OBJECT_AVOIDANCE_RANGE2_START, OBJECT_AVOIDANCE_RANGE2_END);
+        
+        if ((newLHistogramRange2 < (oldLHistogramRange2 - OBJECT_AVOIDANCE_PANIC_THRESHOLD)) &&     // left
+            (newLHistogramRange1 > (oldLHistogramRange1 + OBJECT_AVOIDANCE_PANIC_THRESHOLD))    )
+        {
+            obstacleDetected = (obstacleDetected ==  1) ? 2 : -1;
+#ifdef VERBOSE_PRINTOUTS
+            printf("dynamic left\n");
+#endif
+        }
+        if ((newRHistogramRange2 < (oldRHistogramRange2 - OBJECT_AVOIDANCE_PANIC_THRESHOLD)) &&     // right
+            (newRHistogramRange1 > (oldRHistogramRange1 + OBJECT_AVOIDANCE_PANIC_THRESHOLD))    )
+        {
+            obstacleDetected = (obstacleDetected == -1) ? 2 :  1;
+#ifdef VERBOSE_PRINTOUTS
+            printf("dynamic right\n");
+#endif
+        }
+    }
+    else
+    {
+        mFrameBuffer.purge();
+    }
     
     return obstacleDetected;
 }
@@ -443,7 +472,10 @@ bool Vision::checkForMarkers (MarkerData* marker_data)
     // detect markers
     detectMarkerRegions(mGrayscaleFrame, &mMarkerRegions);
     if (mMarkerRegions.size() > 0)
+    {
+//        printf("Some markers were found, extracting...\n");
         return extractMarkerFromRegions(mColorFrame, mGrayscaleFrame, mDepthFrame, &mMarkerRegions, marker_data);
+    }
     return false;
 }
 
@@ -481,9 +513,13 @@ bool Vision::detectMarkerRegions (cv::Mat& grayscale, std::vector<cv::Rect>* reg
 bool Vision::extractMarkerFromRegions (cv::Mat& color, cv::Mat& grayscale, cv::Mat& depth, std::vector<cv::Rect>* regions, MarkerData* marker_data)
 {
     int i, j;
+//    int k;
     cv::Mat clipped_marker;
     cv::Point_<int>    marker_corners2[4];
+//    cv::Point_<int>    marker_corners2_temp[4];
     cv::Point3_<float> marker_corners3[4];
+//    cv::Point3_<float> marker_corners3_temp[4];
+    int rough_orientation;
     float marker_width3d, marker_height3d, marker_depth3d;
     float marker_orientation3d, marker_unfoldedwidth, marker_unfoldedheight;
     cv::Point3_<float> marker_position3d;
@@ -499,26 +535,96 @@ bool Vision::extractMarkerFromRegions (cv::Mat& color, cv::Mat& grayscale, cv::M
         cv::Mat region_marker(clipped_marker.size(), CV_8UC1);
         //int region_count = connectedComponentLabelling(clipped_marker, region_marker);
         //int region_count_reduction = suppressNoise(region_marker);
-        connectedComponentLabelling(clipped_marker, region_marker);
-        suppressNoise(region_marker);
-        //printf("detected %d regions, reduced to %d\n", region_count, region_count - region_count_reduction);
+        int region_count = connectedComponentLabelling(clipped_marker, region_marker);
+        int region_count_reduction = suppressNoise(region_marker);
+        printf("detected %d regions, reduced to %d\n", region_count, region_count - region_count_reduction);
+
 
         // threshold this result. the regions will be numbers > 1, we don't care about what regions there are anymore, only
         // that there is a foreground region (the marker, minus noise) and a background region (not the marker).
         cv::threshold(region_marker, region_marker, 0, 255, cv::THRESH_BINARY);
 
+        cv::imwrite("shit.png", region_marker);
+        
         // from this thresholded image, extract the 4 corners that make up the marker (if this is the marker at all).
         extractCorners(region_marker, marker_corners2);
         // Convert these to global image co-ordinates.
         for (j = 0; j < 4; j++)
             marker_corners2[j] += (*regions)[i].tl();
+        
+        // get the minimum box
+        float average_depth = getAverageDepthOfRegion(depth, &rough_orientation, cv::Point_<int>(MAX(marker_corners2[0].x, marker_corners2[1].x), MAX(marker_corners2[0].y, marker_corners2[2].y)),
+                                                                                 cv::Point_<int>(MIN(marker_corners2[2].x, marker_corners2[3].x), MIN(marker_corners2[1].y, marker_corners2[3].y)) );
+        for (j = 0; j < 4; j++)
+        {
+            marker_corners3[j].x = marker_corners2[j].x * average_depth * ((PIXEL_SIZE * 2) / FOCAL_LENGTH);
+            marker_corners3[j].y = marker_corners2[j].y * average_depth * ((PIXEL_SIZE * 2) / FOCAL_LENGTH);
+            marker_corners3[j].z = average_depth;
+        }
+        /*
         // convert these 4 2D points to 4 3D points.
-        projectPoints(depth, marker_corners2, marker_corners3, 4);
+        for (j = 0; j < 4; j++)
+        {
+            int y_sign = (j == 0 || j == 2) ? -1 : 1;
+            int x_sign = (j > 1)            ? -1 : 1;
+            
+            marker_corners2_temp[0] = marker_corners2[j];
+            marker_corners2_temp[1] = marker_corners2[j] + cv::Point_<int>(x_sign,      0);
+            marker_corners2_temp[2] = marker_corners2[j] + cv::Point_<int>(0,      y_sign);
+            marker_corners2_temp[3] = marker_corners2[j] + cv::Point_<int>(x_sign, y_sign);
+            projectPoints(depth, marker_corners2_temp, marker_corners3_temp, 4);
+            
+            int non_zero_count = 0;
+            for (k = 0; k < 4; k++)
+                if (marker_corners3_temp[k].z != 0)
+                    non_zero_count++;
+            if (non_zero_count == 0)
+            {
+                marker_corners3[j].x = 0;
+                marker_corners3[j].y = 0;
+                marker_corners3[j].z = 0;
+            }
+            else
+            {
+                marker_corners3[j].x = (marker_corners3_temp[0].x + marker_corners3_temp[1].x + marker_corners3_temp[2].x + marker_corners3_temp[3].x) / (float) non_zero_count;
+                marker_corners3[j].y = (marker_corners3_temp[0].y + marker_corners3_temp[1].y + marker_corners3_temp[2].y + marker_corners3_temp[3].y) / (float) non_zero_count;
+                marker_corners3[j].z = (marker_corners3_temp[0].z + marker_corners3_temp[1].z + marker_corners3_temp[2].z + marker_corners3_temp[3].z) / (float) non_zero_count;
+            }
+        }
+        
+        //projectPoints(depth, marker_corners2, marker_corners3, 4);
+        if (marker_corners3[0].z == 0)
+        {
+            marker_corners3[0].z = marker_corners3[1].z;
+            marker_corners3[0].x = marker_corners3[1].x;
+            marker_corners3[0].y = marker_corners3[2].y;
+        }
+        if (marker_corners3[1].z == 0)
+        {
+            marker_corners3[1].z = marker_corners3[0].z;
+            marker_corners3[1].x = marker_corners3[0].x;
+            marker_corners3[1].y = marker_corners3[3].y;
+        }
+        if (marker_corners3[2].z == 0)
+        {
+            marker_corners3[2].z = marker_corners3[3].z;
+            marker_corners3[2].x = marker_corners3[3].x;
+            marker_corners3[2].y = marker_corners3[0].y;
+        }
+        if (marker_corners3[3].z == 0)
+        {
+            marker_corners3[3].z = marker_corners3[3].z;
+            marker_corners3[3].x = marker_corners3[3].x;
+            marker_corners3[3].y = marker_corners3[1].y;
+        }
+        */
 
         // extract their 3D info.
         marker_width3d  = ((marker_corners3[2].x - marker_corners3[0].x) + (marker_corners3[3].x - marker_corners3[1].x)) / 2.0f;
         marker_height3d = ((marker_corners3[0].y - marker_corners3[1].y) + (marker_corners3[2].y - marker_corners3[3].y)) / 2.0f;
-        marker_depth3d  = ((marker_corners3[0].z - marker_corners3[2].z) + (marker_corners3[1].z - marker_corners3[3].z)) / 2.0f;
+//        marker_depth3d  = ((marker_corners3[0].z - marker_corners3[2].z) + (marker_corners3[1].z - marker_corners3[3].z)) / 2.0f;
+        marker_depth3d = (marker_width3d < marker_height3d) ? rough_orientation * sqrt(marker_height3d*marker_height3d - marker_width3d*marker_width3d) : 0.0;
+//        printf("marker_depth3d = %.1f (average of %.1f, %.1f, %.1f, %.1f)\n", marker_depth3d, marker_corners3[0].z, marker_corners3[1].z, marker_corners3[2].z, marker_corners3[3].z);
         marker_position3d = cv::Point3_<float>(((marker_corners3[0].x + marker_corners3[1].x + marker_corners3[2].x + marker_corners3[3].x) / 4.0f),
                                                ((marker_corners3[0].y + marker_corners3[1].y + marker_corners3[2].y + marker_corners3[3].y) / 4.0f),
                                                ((marker_corners3[0].z + marker_corners3[1].z + marker_corners3[2].z + marker_corners3[3].z) / 4.0f) );
@@ -548,7 +654,8 @@ bool Vision::extractMarkerFromRegions (cv::Mat& color, cv::Mat& grayscale, cv::M
         }
         else
         {
-            //printf("  MARKER LIKE OBJECT IGNORED 2d: (%.1fx%.1f).\n", marker_unfoldedwidth, marker_unfoldedheight);
+//            printf("  MARKER LIKE OBJECT IGNORED 2d: (%.1fx%.1f).\n", marker_unfoldedwidth, marker_unfoldedheight);
+            cv::rectangle(color, (*regions)[i], cv::Scalar(0,255,255), 2, 8, 0);
             regions->erase(regions->begin() + i);
             regions_size--;
             i--;
@@ -558,7 +665,7 @@ bool Vision::extractMarkerFromRegions (cv::Mat& color, cv::Mat& grayscale, cv::M
 }
 
 
-// TODO: we can output the region areas from this function but opencv wants to be a little diva and fuck up the heap when we try...
+// TODO: we can output the areas of each region from this function but opencv wants to be a little diva and fuck up the heap when we try...
 int Vision::connectedComponentLabelling (cv::Mat& src, cv::Mat& dst)
 {
     int x, y, c_index, n_index, w_index, n_label, w_label;
@@ -801,6 +908,46 @@ br_bm_corner: candidate2 = cv::Point_<int>(x, y);
     candidate1_dist2 = cv_euclidean_distance2(candidate1, frame_br);
     candidate2_dist2 = cv_euclidean_distance2(candidate2, frame_br);
     p[3] = (candidate1_dist2 < candidate2_dist2) ? candidate1 : candidate2;
+}
+
+
+float Vision::getAverageDepthOfRegion (cv::Mat& depthFrame, int* rough_orientation, cv::Point_<int> tl, cv::Point_<int> br)
+{
+    static const int xres = depthFrame.cols;
+    int left_total  = 0, left_nzero  = 0;
+    int right_total = 0, right_nzero = 0;
+    float left_average, right_average;
+    int halfway_x = ((br.x - tl.x) / 2) + tl.x;
+    int x, y, z;
+    
+    for (y = tl.y; y < br.y; y++)
+    {
+        for (x = tl.x; x < br.x; x++)
+        {
+            z = *((uint16_t*) (depthFrame.data + (((y * xres) + x)*2)));
+            if (z != 0)
+            {
+                if (x < halfway_x)
+                {
+                    left_total += z;
+                    left_nzero++;
+                }
+                else
+                {
+                    right_total += z;
+                    right_nzero++;
+                }
+            }
+        }
+    }
+    left_average  = ((float) left_total)  / ((float) left_nzero);
+    right_average = ((float) right_total) / ((float) right_nzero);
+    if (left_average < right_average)
+        *rough_orientation = -1;
+    else
+        *rough_orientation = 1;
+    
+    return (left_average + right_average) / 2.0;
 }
 
 

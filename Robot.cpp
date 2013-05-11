@@ -10,10 +10,6 @@ Robot::Robot (const char* map_file) : mCurrentMode(OFF), mMap(map_file), mMoveAc
     mSI->writeByte(128u);
     mCurrentMode = PASSIVE;
     srand(time(NULL));
-    
-    // read the tachometry to zero out the sensors
-    getDistance();
-    getAngle();
 }
 
 
@@ -146,11 +142,36 @@ const sint16_t Robot::getDistance (void) const
     CHECK_ROBOTMODE(PASSIVE);
     uint8_t command[2] = {142u, 19u};
     uint8_t response[2];
+    sint16_t r;
     
     mSI->writeBytes(command, sizeof(command));
     mSI->readBytes(response, sizeof(response));
     
-    return make_sint16_t(response[0], response[1]);
+    
+    // override because the roomba is a piece of crap
+    if (mMoveTarget < 0)
+        return -30;
+    if (mMoveTarget > 0)
+        return 30;
+    return 0;
+    
+    
+    
+    r = make_sint16_t(response[0], response[1]);
+    if (r > ROBOT_MOVE_SPEED || r < -ROBOT_MOVE_SPEED) // something's gone wrong, the roomba really isn't very good at this...
+    {
+        // try flipping them round, possibly it's cocked up and sent them out of order
+        r = make_sint16_t(response[1], response[0]);
+        
+        // is it still wrong?
+        if (r > ROBOT_MOVE_SPEED || r < -ROBOT_MOVE_SPEED)
+        {
+            // if it is just return a kind of sane number based on the FPS (hardcoded because why not). this is a disgusting solution to the problem.
+            r = ROBOT_MOVE_SPEED/9;
+        }
+    }
+    
+    return r;
 #else
     if (mMoveTarget < 0)
         return -WHEEL_MOTOR_EMULATOR_DISTANCE;
@@ -171,11 +192,35 @@ const sint16_t Robot::getAngle (void) const
     CHECK_ROBOTMODE(PASSIVE);
     uint8_t command[2] = {142u, 20u};
     uint8_t response[2];
+    sint16_t r;
     
     mSI->writeBytes(command, sizeof(command));
     mSI->readBytes(response, sizeof(response));
     
-    return make_sint16_t(response[0], response[1]);
+    
+    // override because the roomba is a piece of crap
+    if (mTurnTarget > 0)
+        return 12;
+    else if (mTurnTarget < 0)
+        return -12;
+    return 0;
+    
+    
+    r = make_sint16_t(response[0], response[1]);
+    if (r > 45 || r < -45) // something's gone wrong, the roomba really isn't very good at this...
+    {
+        // try flipping them round, possibly it's cocked up and sent them out of order
+        r = make_sint16_t(response[1], response[0]);
+        
+        // is it still wrong?
+        if (r > 45 || r < -45)
+        {
+            // if it is just return a kind of sane number based on the FPS (hardcoded because why not). this is a disgusting solution to the problem.
+            r = (response[0] & 0x80) ? -15 : 15;
+        }
+    }
+    
+    return r;
 #else
     if (mTurnTarget < 0)
         return -WHEEL_MOTOR_EMULATOR_ANGLE;
@@ -201,6 +246,15 @@ void Robot::setMode (const RobotMode rm)
     mSI->writeByte(rm);
     mCurrentMode = rm;
     msleep(250);
+    
+    if (rm != PASSIVE)
+    {
+        // read the tachometry to zero out the sensors
+        getDistance();
+        getAngle();
+        
+        zeroTargetsAndAccumulators();
+    }
 }
 
 
@@ -233,11 +287,13 @@ void Robot::targetRotation (const sint16_t dc)
 {
 #ifndef WHEEL_MOTOR_EMULATION
     CHECK_ROBOTMODE(SAFE);
-    uint16_t ndc = -dc;
+    sint16_t ndc = -dc;
     
     uint8_t command_header[2] = {152u, 8u};
-    uint8_t command_rotate[5] = {137u, 0u, 0u, (dc < 0) ? 0u : 255u, (dc < 0) ? 1u : 255u};
+    uint8_t command_rotate[5] = {137u, 0xFF, 0x9C, (dc < 0) ? 0x00 : 0xFF, (dc < 0) ? 0x01 : 0xFF};
     uint8_t command_wait[3]   = {157u, (uint8_t) (ndc >> 8), (uint8_t) (ndc & 0xFF)};
+    
+    printf("targetting %d (0x%x, ndc>>8=%x) degree counter-clockwise rotation.\n", ndc, ndc, (uint8_t) (ndc>>8));
     
     mSI->writeBytes(command_header, sizeof(command_header));
     mSI->writeBytes(command_rotate, sizeof(command_rotate));
@@ -361,6 +417,13 @@ void Robot::printBatteryStatus (void) const
     printf("Battery status: %d mV, %d mA, %d'C, %d / %d mAh.\n", voltage, current, temperature, charge, capacity);
 }
 
+
+bool Robot::isTurning (void)
+{
+    return (mTurnTarget != 0);
+}
+
+
 /*
 /// @brief  Updates the Robot's internal map with the latest actuator readings. It is strongly
 ///         recommended to call this every time a new movement instruction is issued.
@@ -374,7 +437,9 @@ void Robot::updateMap (void)
 
 void Robot::updateTargets (int new_move, int new_turn)
 {
+#ifdef VERBOSE_PRINTOUTS
     printf("-------- updating targets (%d, %d) --------\n", new_move, new_turn);
+#endif
     if (new_move && new_turn)
         printf("WARNING: Tried to update targets with two non-zero values (n_move=%d, n_turn=%d)\n", new_move, new_turn);
     mMoveTarget = new_move;
@@ -385,16 +450,25 @@ void Robot::updateTargets (int new_move, int new_turn)
 
 void Robot::updateAccumulators (int d_move, int d_turn)
 {
+#ifdef VERY_VERBOSE_PRINTOUTS
+    printf("  updating accumulators [(%d+%d)/%d mm, (%d+%d)/%d deg]\n", mMoveAccumulator, d_move, mMoveTarget, mTurnAccumulator, d_turn, mTurnTarget);
+#endif
+
     // update.
-    mMoveAccumulator += d_move;
-    mTurnAccumulator += d_turn;
+    // naughty hack to stop weird ass values being introduced
+    if (mTurnTarget != 0)
+        mTurnAccumulator += d_turn;
+    if (mMoveTarget != 0)
+        mMoveAccumulator += d_move;
     
     // check if we have hit our targets.
     // have we finished turning?
     if ((mTurnTarget > 0 && mTurnAccumulator >= mTurnTarget) ||
         (mTurnTarget < 0 && mTurnAccumulator <= mTurnTarget)   )
     {
+#ifdef VERY_VERBOSE_PRINTOUTS
         printf("  turn limit reached\n");
+#endif
         if (mMoveAccumulator != 0)
             printf("WARNING: we somehow accumulated movement despite actually rotating (a=%d). Zeroing out.\n", mMoveAccumulator);
         zeroTargetsAndAccumulators();
@@ -403,7 +477,9 @@ void Robot::updateAccumulators (int d_move, int d_turn)
     if ((mMoveTarget > 0 && mMoveAccumulator >= mMoveTarget) ||
         (mMoveTarget < 0 && mMoveAccumulator <= mMoveTarget)   )
     {
+#ifdef VERY_VERBOSE_PRINTOUTS
         printf("  move limit reached\n");
+#endif
         if (mTurnAccumulator != 0)
             printf("WARNING: we somehow accumulated rotation despite actually moving (a=%d). Zeroing out.\n", mTurnAccumulator);
         zeroTargetsAndAccumulators();
@@ -414,7 +490,7 @@ void Robot::updateAccumulators (int d_move, int d_turn)
 /// @brief  Stop right now, thank you very much. We need somebody with a human touch.
 void Robot::zeroTargetsAndAccumulators (void)
 {
-    if (!(mMoveAccumulator == 0 && mTurnAccumulator == 0))
+    if (mMoveAccumulator != 0 || mTurnAccumulator != 0)
         mMap.addRelativeReadings(mMoveAccumulator, mTurnAccumulator);
     mMoveAccumulator = 0;
     mTurnAccumulator = 0;
@@ -437,7 +513,9 @@ bool Robot::nappingTimeUp (void)
     time_t now;
     time(&now);
     int current_nap_duration = (int) difftime(now, mNapStarted);
+#ifdef VERY_VERBOSE_PRINTOUTS
     printf("    nap duration = %d / %d\n", current_nap_duration, mNapDuration);
+#endif
     return (current_nap_duration >= mNapDuration);
 }
 
@@ -475,6 +553,7 @@ void Robot::processMotorActions (Vision* vision)
             zeroTargetsAndAccumulators();
             if (next.type == ROTATION)
             {
+//                targetRotation(next.action.angle);
                 updateTargets(0, next.action.angle);
                 if (next.action.angle > 0)
                     setSpeed(ROBOT_TURN_SPEED, -ROBOT_TURN_SPEED);  // CW
@@ -548,6 +627,8 @@ void Robot::dropPathingActions (void)
     std::queue<MotorAction>    emptyMotor;
     std::swap(mPathingActions, emptyPathing);
     std::swap(mMotorActions,   emptyMotor);
+    // also zero out accumulators
+    zeroTargetsAndAccumulators();
     // we now having nothing to do, lovely.
     mIsIdle = true;
 }
@@ -562,7 +643,9 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     bool    has_napped = false;
     static int nap_cooldown = 0;
     
+#ifdef VERY_VERBOSE_PRINTOUTS
     printf("  lets path\n");
+#endif
     
     // bookkeeping
     mMap.updateWeights();
@@ -570,7 +653,9 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     // handle napping and exit straight out if we are currently napping.
     if (mIsNapping)
     {
+#ifdef VERY_VERBOSE_PRINTOUTS
         printf("  napping\n");
+#endif
         if (!nappingTimeUp())
             return;
         mIsNapping = false;
@@ -585,7 +670,6 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     // update the accumulators
     const int latestDistance = (int) getDistance();
     const int latestAngle    = (int) getAngle();
-    printf("  updating accumulators [(%d+%d)/%d mm, (%d+%d)/%d deg]\n", latestDistance, mMoveAccumulator, mMoveTarget, latestAngle, mTurnAccumulator, mTurnTarget);
     updateAccumulators(latestDistance, latestAngle);
     
     // check bumpers. stuff touching the bumpers = immediate problem which stops for no-one.
@@ -594,31 +678,39 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
         getBumperValues(bumperValues);
         if ((bumperValues[0] || bumperValues[1]) && !has_napped && nap_cooldown == 0)
         {
+#ifdef VERBOSE_PRINTOUTS
             printf("  EW SOMETHING ON THE BUMPERS. sleeping\n");
+#endif
             startNapping(PATHING_NAP_DURATION);
             return;
         }
         else if ((bumperValues[0] || bumperValues[1]) && has_napped)
         {
+#ifdef VERBOSE_PRINTOUTS
             printf("  EW SOMETHING STILL ON THE BUMPERS HAVING SLEPT.\n");
+#endif
             zeroTargetsAndAccumulators();
             
             if (mCurrentAction.type == GREEDY_TABLE)
             {
-                printf("    rerouting\n");
+#ifdef VERBOSE_PRINTOUTS
+                printf("  - rerouting\n");
+#endif
                 reroutePathingActions();
             }
             else
             {
-                printf("    dropping\n");
+#ifdef VERBOSE_PRINTOUTS
+                printf("  - dropping\n");
+#endif
                 dropPathingActions();
                 
                 if (bumperValues[0] && !bumperValues[1])        // just the left bumper (so rotate right).
-                    next_rotation_offset = 90;
+                    next_rotation_offset = 20;
                 else if (!bumperValues[0] &&  bumperValues[1])  // just the right bumper (so rotate left).
-                    next_rotation_offset = -90;
+                    next_rotation_offset = -20;
                 else                                            // both bumpers, spin right round, right round.
-                    next_rotation_offset = 180;
+                    next_rotation_offset = 20;
                 
                 mPathingActions.push(generateRandomPathingAction(next_rotation_offset));
             }
@@ -631,34 +723,42 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     {
         if (object_avoidance && !has_napped)
         {
-            printf("  PANICKING FROM THE CAMERA. sleeping\n");
+#ifdef VERBOSE_PRINTOUTS
+            printf("  PANICKING FROM THE CAMERA (%c). sleeping\n", (object_avoidance > 1) ? 's' : 'd');
+#endif
             // we've seen something freaky - wait for 1s and see if it's still there.
             startNapping(PATHING_NAP_DURATION);
             return;
         }
         else if (object_avoidance && has_napped)
         {
-            printf("  STILL PANICKING FROM THE CAMERA HAVING SLEPT\n");
+#ifdef VERBOSE_PRINTOUTS
+            printf("  STILL PANICKING FROM THE CAMERA (%c) HAVING SLEPT\n", (object_avoidance > 1) ? 's' : 'd');
+#endif
             // okay now we've had a little snooze, but there's still something freaky as shit out there.
             // TAKE EVASIVE ACTION.
             zeroTargetsAndAccumulators();
             
             if (mCurrentAction.type == GREEDY_TABLE)
             {
-                printf("    rerouting\n");
+#ifdef VERBOSE_PRINTOUTS
+                printf("  - rerouting\n");
+#endif
                 reroutePathingActions();
             }
             else
             {
-                printf("    dropping\n");
+#ifdef VERBOSE_PRINTOUTS
+                printf("  - dropping\n");
+#endif
                 dropPathingActions();
                 
                 if (object_avoidance == -1)                     // just something scary on the left, turn right.
-                    next_rotation_offset = 90;
+                    next_rotation_offset = 20;
                 else if (object_avoidance == 1)                 // just something scary on the right, turn left.
-                    next_rotation_offset = -90;
+                    next_rotation_offset = -20;
                 else                                            // both sides :(
-                    next_rotation_offset = 180;
+                    next_rotation_offset = 40;
                 
                 mPathingActions.push(generateRandomPathingAction(next_rotation_offset));
             }
@@ -671,10 +771,14 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
     {
         if (target_recognition)
         {
+#ifdef VERBOSE_PRINTOUTS
             printf("  marker seen!\n");
+#endif
             if (mCurrentAction.type != GREEDY_TABLE || (mCurrentAction.type == GREEDY_TABLE && mPathingActions.size() < 1))
             {
+#ifdef VERBOSE_PRINTOUTS
                 printf("  - lets go!\n");
+#endif
                 zeroTargetsAndAccumulators();
                 dropPathingActions();
                 
@@ -684,7 +788,9 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
             }
             else
             {
+#ifdef VERBOSE_PRINTOUTS
                 printf("  - nvm\n");
+#endif
             }
         }
     }
@@ -694,14 +800,20 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
 //    if (!action_generated && mPathingActions.size() == 0 && mMotorActions.size() == 0)
     if (!action_generated && mIsIdle)
     {
+#ifdef VERBOSE_PRINTOUTS
         printf("  nothing better to do, lets random it up\n");
+#endif
         PathingAction action = generateRandomPathingAction(0);
+#ifdef VERBOSE_PRINTOUTS
         printf("  - type = %d, target = (%d,%d) = %d deg -> %d mm -> %d deg\n", (int) action.type, action.target.x, action.target.y, action.first_angle, action.displacement, action.final_angle);
+#endif
         mPathingActions.push(action);
     }
     
     // actually execute the jobs we've spent so long constructing.
+#ifdef VERY_VERBOSE_PRINTOUTS
     printf("  executing motor actions\n");
+#endif
     processMotorActions(vision);
 }
 
