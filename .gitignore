@@ -16,6 +16,7 @@
 *.pdf
 *.svg
 *.png
+*.ttf
 
 # Project specific files
 Release/*
@@ -24,4 +25,4 @@ archive/initial_code_host/ProcessVideo
 archive/initial_code_pandaboard/Libs/*
 archive/initial_code_pandaboard/Release/*
 RobotClient
-Robot
+RoBin

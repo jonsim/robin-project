@@ -33,6 +33,12 @@ Point = namedtuple('Point', ['x', 'y', 'z'])
 #--------------------------------------------------------------#
 #-------------------- FUNCTION DEFINITIONS --------------------#
 #--------------------------------------------------------------#
+def convert_rgb_to_string (rgb):
+    r = int(rgb[0]*255)
+    g = int(rgb[1]*255)
+    b = int(rgb[2]*255)
+    s = '#%02x%02x%02x' % (r, g, b)
+    return s
 # H' takes values between 0-1530
 # H' =    0- 255  RGB=   255, 0-255, 0
 # H' =  255- 510  RGB= 255-0,   255, 0
@@ -212,8 +218,35 @@ def setup_plot_labels (ax):
     ax.set_yticks(range(0, 4+1))
 
 
-"""
-def plot_2d_data (data2d, colours=None, depth_scale=True):
+# returns an array A = MxN points with M observations in N dimensions. A[i]=A[i,:] returns the ith
+# observation, A[i,0] returns the ith observations's x value etc. A[:,0] returns all the x values.
+def generate_3d_data (data2d):
+    X_SUBSTEP = 4
+    Y_SUBSTEP = 4
+    Sp_over_F = (0.2084 / 120)
+    r = zeros(((640/X_SUBSTEP)*(480/Y_SUBSTEP), 3))
+    i = 0
+    for y in range(0, 480, Y_SUBSTEP):
+        for x in range(0, 640, X_SUBSTEP):
+            z = data2d[x][y]
+            if z != 0:
+                r[i,0] = (x - 320) * z * Sp_over_F  # rX
+                r[i,1] = (240 - y) * z * Sp_over_F  # rY
+                r[i,2] = z                          # rZ
+            i += 1
+    return r
+
+def generate_colors (data2d):
+    X_SUBSTEP = 4
+    Y_SUBSTEP = 4
+    colors = []
+    for y in range(0, 480, Y_SUBSTEP):
+        for x in range(0, 640, X_SUBSTEP):
+            v = data2d[x][y]
+            colors.append(convert_rgb_to_string(convert_depth_to_rgb(v)))
+    return colors
+
+"""def plot_2d_data (data2d, colours=None, depth_scale=True):
     # Initialise, calculating the resolution and creating the image (bg=green)
     res_step = data2d[1].x - data2d[0].x
     xres = 640 / res_step
@@ -251,7 +284,7 @@ def plot_2d_data (data2d, colours=None, depth_scale=True):
         title_string = "DEPTH (mm)"
         title_string_s = draw.textsize(title_string)
         title_string_offset_x = scale_width / 2 - title_string_s[0] / 2
-        title_string_offset_x = 4   # Comment this out for a more accurate x offset (at the risk of slight-non-centering
+        title_string_offset_x = 4   # Comment this out for a more accurate x offset (at the risk of slight-non-centering)
         title_string_offset_y = 2
         draw.text((scale_offset_x+title_string_offset_x, scale_offset_y+title_string_offset_y), title_string, fill=(0,0,0))
         draw.text((scale_offset_x+25, scale_offset_y+15), "- 0", fill=(0,0,0))
@@ -259,6 +292,44 @@ def plot_2d_data (data2d, colours=None, depth_scale=True):
     
     # show
     image.show()"""
+
+
+def plot_3d_data (data3d, colours=None, filename=None):
+    # pre-configure the plot environment
+    matplotlib.rcParams['axes.unicode_minus'] = False
+    
+    fig = plt.figure()
+    axe = Axes3D(fig)
+    
+    fig.patch.set_facecolor('white')
+    font = {'family': 'Quattrocento',
+            'weight': 'bold',
+            'size'  : 16}
+    matplotlib.rc('font', **font)
+    #axe.grid(True, c='#000000')
+    #axe.set_aspect('equal')
+    axe.set_aspect(0.5)
+    c2 = ['#bbe600', '#00c7d9', '#e68e00']
+    
+    if colours == None:
+        axe.scatter(data3d[:,0], data3d[:,1], data3d[:,2], zdir='y', s=2000, c=(255,0,0),     lw=0, marker='o')
+    else:
+        axe.scatter(data3d[:,0], data3d[:,1], data3d[:,2], zdir='y', s=2000, c=colours, lw=0, marker='o')
+    #axe.dist = 15
+    axe.set_xlabel('X-axis')
+    axe.set_xlim3d([-1200, 1200])
+    axe.set_zlabel('Y-axis')
+    axe.set_zlim3d([-200, 1000])
+    axe.set_ylabel('Z-axis')
+    axe.set_ylim3d([ 1000, 3400])
+    
+    # return
+    if filename == None:
+        plt.show()
+    else:
+        #plt.savefig(filename + ".pdf")
+        plt.savefig(filename + ".svg")
+        plt.savefig(filename + "_pc.png")
 
 
 
@@ -277,12 +348,17 @@ elif len(sys.argv) > 2:
 filename = sys.argv[1]
 
 # setup
-ax = setup_plot()
+#ax = setup_plot()
 
 # do stuff
 print "Loading image..."
 image = load_image(filename)
-
+print "Converting..."
+data3d = generate_3d_data(image)
+colors = generate_colors(image)
+print "Plotting..."
+plot_3d_data(data3d, colors)
+"""
 print "Making histogram..."
 histogram = make_histogram(image, side=side)
 
@@ -296,4 +372,4 @@ print "Outputting histogram..."
 # save stuff
 output_filename = filename.split('.')[0] + "_hist_" + side
 plt.savefig(output_filename + ".svg")
-plt.savefig(output_filename + ".png")
+plt.savefig(output_filename + ".png")"""
