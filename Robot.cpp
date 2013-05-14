@@ -60,11 +60,20 @@ void Robot::getBumperValues (uint8_t* r) const
     uint8_t command[2] = {142u, 7u};
     uint8_t response;
     
+    usleep(10000);
     mSI->writeBytes(command, 2);
     response = mSI->readByte();
     
-    r[0] = response & 2u;
-    r[1] = response & 1u;
+    if ((response & 0x1C) != 0)
+    {
+        r[0] = 0u;
+        r[1] = 0u;
+    }
+    else
+    {
+        r[0] = response & 2u;
+        r[1] = response & 1u;
+    }
 }
 
 
@@ -173,9 +182,16 @@ const sint16_t Robot::getDistance (void) const
     if (r > 200 || r < -200)
     {
         if (mMoveTarget > 0)
-            r = 20;
-        else
-            r = -20;
+            r = 10;
+        else if (mMoveTarget < 0)
+            r = -10;
+    }
+    if (r == 0)
+    {
+        if (mMoveTarget > 0)
+            r = 10;
+        else if (mMoveTarget < 0)
+            r = -10;
     }
     printf("distance travelled = %d (%x %x)\n", r, response[0], response[1]);
 /*    if (r > ROBOT_MOVE_SPEED || r < -ROBOT_MOVE_SPEED) // something's gone wrong, the roomba really isn't very good at this...
@@ -235,9 +251,16 @@ const sint16_t Robot::getAngle (void) const
     if (r > 90 || r < -90)
     {
         if (mTurnTarget > 0)
-            r = 10;
-        else
-            r = -10;
+            r = 5;
+        else if (mTurnTarget < 0)
+            r = -5;
+    }
+    if (r == 0)
+    {
+        if (mTurnTarget > 0)
+            r = 5;
+        else if (mTurnTarget < 0)
+            r = -5;
     }
     /*
     if (r > 45 || r < -45) // something's gone wrong, the roomba really isn't very good at this...
@@ -305,8 +328,8 @@ void Robot::setSpeed (const sint16_t lVel, const sint16_t rVel)
         mCurrentLeftVelocity  = lVel;
         mCurrentRightVelocity = rVel;
         uint8_t command[5] = {145u,
-                              (uint8_t) (lVel >> 8), (uint8_t) (lVel & 0xFF),
-                              (uint8_t) (rVel >> 8), (uint8_t) (rVel & 0xFF) };
+                              (uint8_t) (rVel >> 8), (uint8_t) (rVel & 0xFF),
+                              (uint8_t) (lVel >> 8), (uint8_t) (lVel & 0xFF) };
         mSI->writeBytes(command, 5);
     }
 #endif
@@ -754,11 +777,11 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
                 dropPathingActions();
                 
                 if (bumperValues[0] && !bumperValues[1])        // just the left bumper (so rotate right).
-                    next_rotation_offset = 20;
+                    next_rotation_offset = 90;
                 else if (!bumperValues[0] &&  bumperValues[1])  // just the right bumper (so rotate left).
-                    next_rotation_offset = -20;
+                    next_rotation_offset = -90;
                 else                                            // both bumpers, spin right round, right round.
-                    next_rotation_offset = 20;
+                    next_rotation_offset = 180;
                 
                 mPathingActions.push(generateRandomPathingAction(next_rotation_offset));
             }
@@ -802,11 +825,11 @@ void Robot::timestep (Vision* vision, sint8_t object_avoidance, bool target_reco
                 dropPathingActions();
                 
                 if (object_avoidance == -1)                     // just something scary on the left, turn right.
-                    next_rotation_offset = 20;
+                    next_rotation_offset = 90;
                 else if (object_avoidance == 1)                 // just something scary on the right, turn left.
-                    next_rotation_offset = -20;
+                    next_rotation_offset = -90;
                 else                                            // both sides :(
-                    next_rotation_offset = 40;
+                    next_rotation_offset = 180;
                 
                 mPathingActions.push(generateRandomPathingAction(next_rotation_offset));
             }

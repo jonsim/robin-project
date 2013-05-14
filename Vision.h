@@ -39,7 +39,7 @@
 #define COLOR_STREAM                // whether the color video is collected from the Kinect.
 //#define COLOR_STREAMING_ENABLED     // whether the color video is streamed to connected clients.
 #define DEPTH_STREAM                // whether the depth video is collected from the Kinect.
-//#define DEPTH_STREAMING_ENABLED     // whether the depth video is streamed to connected clients.
+#define DEPTH_STREAMING_ENABLED     // whether the depth video is streamed to connected clients.
 #define DEPTH_COLORED               // whether the depth video is coloured before being streamed.
 #define COMPRESSION_QUALITY 50      // quality of streamed images. can be 0-100 with a higher number representing a larger file size but a higher quality image.
 #define MAX_DEPTH 10000             // maximum depth the kinect sensor can read. must be in the openni libraries somewhere but i cant find it.
@@ -63,8 +63,8 @@
 //#define HIST_DYNAMIC_PANIC_THRESHOLD  1000 // this many readings suddenly transitioning out of the near range will cause panic
 // object avoidance defines
 // values for half frame 640x480
-#define OBJECT_AVOIDANCE_ERROR_THRESHOLD 80000 // this many readings in the error range (~0-500 mm) will cause instant panic.
-#define OBJECT_AVOIDANCE_PANIC_THRESHOLD  4000 // this many readings suddenly transitioning from range1 to range2 will cause panic.
+#define OBJECT_AVOIDANCE_ERROR_THRESHOLD 100000 // this many readings in the error range (~0-500 mm) will cause instant panic.
+#define OBJECT_AVOIDANCE_PANIC_THRESHOLD   5000 // this many readings suddenly transitioning from range1 to range2 will cause panic.
 #define OBJECT_AVOIDANCE_RANGE1_START   500 // mm
 #define OBJECT_AVOIDANCE_RANGE1_END     699 // mm
 #define OBJECT_AVOIDANCE_RANGE2_START   700 // mm
@@ -120,6 +120,8 @@ public:
     
     std::vector<uint8_t> mStreamBuffer;
     
+    // Frame Buffer
+    FrameBuffer     mFrameBuffer;
 
 private:
     // camera config stuff
@@ -148,8 +150,6 @@ private:
     XnBool fileExists       (const char *fn);
     
     // Variables
-    // Frame Buffer
-    FrameBuffer     mFrameBuffer;
     // Marker detection stuff.
     cv::CascadeClassifier mMarkerCascade;
     std::vector<cv::Rect> mMarkerRegions;

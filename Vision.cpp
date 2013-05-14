@@ -238,11 +238,10 @@ sint8_t Vision::checkForObstacles (bool dynamic_check)
 //    printf("  - retrieved nL (%x), nR (%x), oL (%x), oR (%x)\n", (uint32_t) newLHistogram, (uint32_t) newRHistogram, (uint32_t) oldLHistogram, (uint32_t) oldRHistogram);
     
     // check we're all properly initialised
-    if (newLHistogram == NULL || newRHistogram == NULL || oldLHistogram == NULL || oldRHistogram == NULL)
-    {
-//        printf("  we're not ready yet!\n");
+    if (newLHistogram == NULL || newRHistogram == NULL)
         return 0;
-    }
+    else if (oldLHistogram == NULL || oldRHistogram == NULL)
+        dynamic_check = false;
     
     // retrieve the ranges
 //    printf("  getting the ranges\n");
@@ -257,7 +256,7 @@ sint8_t Vision::checkForObstacles (bool dynamic_check)
         obstacleDetected = (obstacleDetected == -1) ? 2 :  1;
 #ifdef VERBOSE_PRINTOUTS
     if (obstacleDetected)
-        printf("static error\n");
+        printf("static error (%d, %d)\n", newLHistogramError, newRHistogramError);
 #endif
     
     // DYNAMIC THREAT DETECTION
@@ -283,7 +282,7 @@ sint8_t Vision::checkForObstacles (bool dynamic_check)
         {
             obstacleDetected = (obstacleDetected ==  1) ? 2 : -1;
 #ifdef VERBOSE_PRINTOUTS
-            printf("dynamic left\n");
+            printf("dynamic left (%d, %d)\n", oldLHistogramRange2 - newLHistogramRange2, newLHistogramRange1 - oldLHistogramRange1);
 #endif
         }
         if ((newRHistogramRange2 < (oldRHistogramRange2 - OBJECT_AVOIDANCE_PANIC_THRESHOLD)) &&     // right
@@ -291,13 +290,9 @@ sint8_t Vision::checkForObstacles (bool dynamic_check)
         {
             obstacleDetected = (obstacleDetected == -1) ? 2 :  1;
 #ifdef VERBOSE_PRINTOUTS
-            printf("dynamic right\n");
+            printf("dynamic right (%d, %d)\n",  oldRHistogramRange2 - newRHistogramRange2, newRHistogramRange1 - oldRHistogramRange1);
 #endif
         }
-    }
-    else
-    {
-        mFrameBuffer.purge();
     }
     
     return obstacleDetected;

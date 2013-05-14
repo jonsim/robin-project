@@ -115,6 +115,9 @@ int main (int argc, char* argv[])
         
         // Sample the camera data
 //        printf("capturing frame\n");
+        bool robot_is_turning = reginald.isTurning();
+        if (robot_is_turning)
+            vinny.mFrameBuffer.purge();
         vinny.captureFrame();
         frameCounter = vinny.getFrameID();
 #ifdef VERY_VERBOSE_PRINTOUTS
@@ -126,7 +129,7 @@ int main (int argc, char* argv[])
 #ifdef VERY_VERBOSE_PRINTOUTS
         printf("checking for obstacles\n");
 #endif
-        panicStations = vinny.checkForObstacles(reginald.isTurning());
+        panicStations = vinny.checkForObstacles(robot_is_turning);
 /*        if (panicStations > 0 && !turnCounter)
             turnCounter =  ATOMIC_TURN_AMOUNT;
         else if (panicStations < 0 && !turnCounter)

@@ -21,8 +21,8 @@
 #define PATHING_ANGULAR_STD_DEV            40 // degrees.
 #define PATHING_NAP_DURATION                1 // the amount of time, in seconds, to wait for scary things to go away.
 #define TARGET_NAP_DURATION                 3 // the amount of time, in seconds, to wait at tables.
-#define ROBOT_MOVE_SPEED                  100 // mm/s
-#define ROBOT_TURN_SPEED                   80 // mm/s
+#define ROBOT_MOVE_SPEED                  200 // mm/s
+#define ROBOT_TURN_SPEED                  100 // mm/s
 #define PATHING_MAX_PATHING_ACTIONS        50
 //#define WHEEL_MOTOR_EMULATION
 #define WHEEL_MOTOR_EMULATOR_DISTANCE      50
