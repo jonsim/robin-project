@@ -6,6 +6,7 @@
 #ifndef FRAMEBUFFER_H
 #define FRAMEBUFFER_H
 
+
 /*-------------------- INCLUDES --------------------*/
 #include <stdio.h>
 #include <stdlib.h>
