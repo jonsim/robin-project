@@ -89,7 +89,7 @@ void Vision::initialiseCamera (void)
     XnUInt64 focal_length;
     mDepthGenerator.GetRealProperty("ZPPS", pixel_size);
     mDepthGenerator.GetIntProperty( "ZPD",  focal_length);
-    printf("ZPPS=%f, ZPD=%d\n", pixel_size, focal_length);
+    printf("ZPPS=%f, ZPD=%d\n", pixel_size, (int) focal_length);
     
     printf("done.\n");
 }

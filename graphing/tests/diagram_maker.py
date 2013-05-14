@@ -135,18 +135,26 @@ def load_image (filename):
 
 def make_histogram (data2d, side='both'):
     # setup the ranges to accomodate the side we want to look at.
+    # y 0-240 is top half of image, 241-480 is bottom half
     xstart = 0
     xend   = 640
+    ystart = 0
+    yend   = 480
     if side == 'left':
         xend = 320
     elif side == 'right':
         xstart = 320
+    elif side == 'region':
+        xstart = 64
+        xend   = 576
+        ystart = 80
+        yend   = 280
     
     # make the data structure
     hist = zeros(10000)
     
     # loop through the input and build the histogram
-    for y in range(0, 480):
+    for y in range(ystart, yend):
         for x in range(xstart, xend):
             hist[data2d[x][y]] += 1
     
@@ -156,7 +164,7 @@ def make_histogram (data2d, side='both'):
         colours.append(convert_depth_to_rgb(i))
     
     # print the histogram's stats
-    hist_range1 = 0
+    """hist_range1 = 0
     for i in range(600, 900):
         hist_range1 += hist[i]
     hist_range2 = 0
@@ -164,7 +172,7 @@ def make_histogram (data2d, side='both'):
         hist_range2 += hist[i]
     print "hist[0] =", hist[0]
     print "hist[600-899]  =", hist_range1
-    print "hist[900-1199] =", hist_range2
+    print "hist[900-1199] =", hist_range2"""
     
     # tidy up the histogram
     histy = hist.tolist()
@@ -341,19 +349,18 @@ def plot_3d_data (data3d, colours=None, filename=None):
 filename = ""
 side = 'both'
 if len(sys.argv) < 2:
-    print "ERROR: the program must be called as follows:\n  ./diagram_maker.py filename.png ['left' | 'right' | 'both']"
+    print "ERROR: the program must be called as follows:\n  ./diagram_maker.py filename.png ['left' | 'right' | 'region' | 'both']"
     sys.exit()
 elif len(sys.argv) > 2:
     side = sys.argv[2]
 filename = sys.argv[1]
 
 # setup
-#ax = setup_plot()
 
 # do stuff
 print "Loading image..."
 image = load_image(filename)
-print "Converting..."
+"""print "Converting..."
 data3d = generate_3d_data(image)
 colors = generate_colors(image)
 print "Plotting..."
@@ -363,6 +370,7 @@ print "Making histogram..."
 histogram = make_histogram(image, side=side)
 
 print "Plotting histogram..."
+ax = setup_plot()
 plot_histogram(ax, histogram)
 setup_plot_labels(ax)
 
@@ -371,5 +379,5 @@ print "Outputting histogram..."
 #plt.show()
 # save stuff
 output_filename = filename.split('.')[0] + "_hist_" + side
-plt.savefig(output_filename + ".svg")
-plt.savefig(output_filename + ".png")"""
+#plt.savefig(output_filename + ".svg")
+plt.savefig(output_filename + ".png")

@@ -142,7 +142,13 @@ int main (int argc, char* argv[])
             else
                 printf("checking for markers\n");
 #endif
-            markerFound = vinny.checkForMarkers(&markerData);
+#ifdef MOVEMENT_ENABLED
+            reginald.pause();
+#endif
+            markerFound = vinny.checkForMarkers(&markerData);      
+#ifdef MOVEMENT_ENABLED
+            reginald.unpause();
+#endif
 //            retestMarker = markerFound && !retestMarker;
             
 #ifdef VERBOSE_PRINTOUTS

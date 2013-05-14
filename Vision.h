@@ -37,7 +37,7 @@
 #define VISION_XML_CONFIG_PATH       "CameraConfiguration.xml"
 #define VISION_XML_CONFIG_PATH_LOCAL "/home/jon/individual_project/CameraConfiguration.xml"
 #define COLOR_STREAM                // whether the color video is collected from the Kinect.
-#define COLOR_STREAMING_ENABLED     // whether the color video is streamed to connected clients.
+//#define COLOR_STREAMING_ENABLED     // whether the color video is streamed to connected clients.
 #define DEPTH_STREAM                // whether the depth video is collected from the Kinect.
 //#define DEPTH_STREAMING_ENABLED     // whether the depth video is streamed to connected clients.
 #define DEPTH_COLORED               // whether the depth video is coloured before being streamed.
@@ -63,19 +63,19 @@
 //#define HIST_DYNAMIC_PANIC_THRESHOLD  1000 // this many readings suddenly transitioning out of the near range will cause panic
 // object avoidance defines
 // values for half frame 640x480
-#define OBJECT_AVOIDANCE_ERROR_THRESHOLD 90000 // this many readings in the error range (~0-500 mm) will cause instant panic.
-#define OBJECT_AVOIDANCE_PANIC_THRESHOLD  3000 // this many readings suddenly transitioning from range1 to range2 will cause panic.
+#define OBJECT_AVOIDANCE_ERROR_THRESHOLD 80000 // this many readings in the error range (~0-500 mm) will cause instant panic.
+#define OBJECT_AVOIDANCE_PANIC_THRESHOLD  4000 // this many readings suddenly transitioning from range1 to range2 will cause panic.
 #define OBJECT_AVOIDANCE_RANGE1_START   500 // mm
 #define OBJECT_AVOIDANCE_RANGE1_END     699 // mm
 #define OBJECT_AVOIDANCE_RANGE2_START   700 // mm
 #define OBJECT_AVOIDANCE_RANGE2_END     899 // mm
 
 // target recognition defines
-#define TARGET_RECOGNITION_RUN_FREQUENCY                10 // every x frames the target recognition module is run.
+#define TARGET_RECOGNITION_RUN_FREQUENCY                20 // every x frames the target recognition module is run.
 #define TARGET_RECOGNITION_MARKER_WIDTH                 50 // mm
 #define TARGET_RECOGNITION_MARKER_HEIGHT                50 // mm
 #define TARGET_RECOGNITION_MARKER_EPSILON               25 // mm
-#define TARGET_RECOGNITION_HAAR_SCALING                1.2 // default 1.1
+#define TARGET_RECOGNITION_HAAR_SCALING                1.1 // default 1.1
 #define TARGET_RECOGNITION_HAAR_NEIGHBOURS               1 // default 2
 #define TARGET_RECOGNITION_EXTRACTION_BINARY_THRESHOLD  80 // grayscale cutoff for binarisation used in marker extraction.
 #define TARGET_RECOGNITION_EXTRACTION_SIZE_THRESHOLD    80 // pixel blobs with an area smaller than this are removed.
@@ -84,11 +84,11 @@
 // occupancy analysis defines
 #define OCCUPANCY_ANALYSIS_X_START        64 // the number of pixels cropped from the left   of the image before OA starts. 10% of the width.
 #define OCCUPANCY_ANALYSIS_X_END         576 // the number of pixels cropped from the right  of the image before OA starts. 10% of the width.
-#define OCCUPANCY_ANALYSIS_Y_START       120 // the number of pixels cropped from the top    of the image before OA starts. 25% of the height.
-#define OCCUPANCY_ANALYSIS_Y_END         360 // the number of pixels cropped from the bottom of the image before OA starts. 25% of the height.
-#define OCCUPANCY_ANALYSIS_RANGE_START   800 // mm. the start of the range to look for legs in.
-#define OCCUPANCY_ANALYSIS_RANGE_END    1600 // mm. the end   of the range to look for legs in.
-#define OCCUPANCY_ANALYSIS_THRESHOLD   50000 // pixels. this many pixels in the given range will result in 'occupancy' being detected. Out of 122800.
+#define OCCUPANCY_ANALYSIS_Y_START       100 // the number of pixels cropped from the top    of the image before OA starts. 25% of the height.
+#define OCCUPANCY_ANALYSIS_Y_END         300 // the number of pixels cropped from the bottom of the image before OA starts. 25% of the height.
+#define OCCUPANCY_ANALYSIS_RANGE_START   900 // mm. the start of the range to look for legs in.
+#define OCCUPANCY_ANALYSIS_RANGE_END    1900 // mm. the end   of the range to look for legs in.
+#define OCCUPANCY_ANALYSIS_THRESHOLD   12000 // pixels. this many pixels in the given range will result in 'occupancy' being detected. Out of 122800.
 
 #define VERBOSE_PRINTOUTS
 

@@ -3,7 +3,16 @@
 
 /// @brief  Constructor. Opens and initialises the serial connection before turning on the Robot. It
 ///         starts in PASSIVE mode. See setMode() for further information.
-Robot::Robot (const char* map_file) : mCurrentMode(OFF), mMap(map_file), mMoveAccumulator(0), mMoveTarget(0), mTurnAccumulator(0), mTurnTarget(0), mIsNapping(false), mIsIdle(true)
+Robot::Robot (const char* map_file) : mCurrentMode(OFF),
+                                      mMap(map_file),
+                                      mMoveAccumulator(0),
+                                      mMoveTarget(0),
+                                      mTurnAccumulator(0),
+                                      mTurnTarget(0),
+                                      mCurrentLeftVelocity(0),
+                                      mCurrentRightVelocity(0),
+                                      mIsNapping(false),
+                                      mIsIdle(true)
 {
     mSI = new SerialInterface();
     mSI->start();
@@ -51,7 +60,7 @@ void Robot::getBumperValues (uint8_t* r) const
     uint8_t command[2] = {142u, 7u};
     uint8_t response;
     
-    mSI->writeBytes(command, sizeof(command));
+    mSI->writeBytes(command, 2);
     response = mSI->readByte();
     
     r[0] = response & 2u;
@@ -144,21 +153,32 @@ const sint16_t Robot::getDistance (void) const
     uint8_t response[2];
     sint16_t r;
     
-    mSI->writeBytes(command, sizeof(command));
-    mSI->readBytes(response, sizeof(response));
+    if (mMoveTarget == 0)
+        return 0;
     
+    usleep(10000);
+    mSI->writeBytes(command, 2);
+    mSI->readBytes(response, 2);
     
+    if (mMoveTarget == 0)
+        return 0;
     // override because the roomba is a piece of crap
-    if (mMoveTarget < 0)
+    /*if (mMoveTarget < 0)
         return -30;
     if (mMoveTarget > 0)
         return 30;
-    return 0;
-    
-    
+    return 0;*/
     
     r = make_sint16_t(response[0], response[1]);
-    if (r > ROBOT_MOVE_SPEED || r < -ROBOT_MOVE_SPEED) // something's gone wrong, the roomba really isn't very good at this...
+    if (r > 200 || r < -200)
+    {
+        if (mMoveTarget > 0)
+            r = 20;
+        else
+            r = -20;
+    }
+    printf("distance travelled = %d (%x %x)\n", r, response[0], response[1]);
+/*    if (r > ROBOT_MOVE_SPEED || r < -ROBOT_MOVE_SPEED) // something's gone wrong, the roomba really isn't very good at this...
     {
         // try flipping them round, possibly it's cocked up and sent them out of order
         r = make_sint16_t(response[1], response[0]);
@@ -170,7 +190,7 @@ const sint16_t Robot::getDistance (void) const
             r = ROBOT_MOVE_SPEED/9;
         }
     }
-    
+    */
     return r;
 #else
     if (mMoveTarget < 0)
@@ -194,19 +214,32 @@ const sint16_t Robot::getAngle (void) const
     uint8_t response[2];
     sint16_t r;
     
-    mSI->writeBytes(command, sizeof(command));
-    mSI->readBytes(response, sizeof(response));
+    usleep(10000);
+    mSI->writeBytes(command, 2);
+    mSI->readBytes(response, 2);
     
+    if (mTurnTarget == 0)
+        return 0;
     
+    /*
     // override because the roomba is a piece of crap
     if (mTurnTarget > 0)
         return 12;
     else if (mTurnTarget < 0)
         return -12;
     return 0;
-    
+    */
     
     r = make_sint16_t(response[0], response[1]);
+    printf("angle travelled = %d (%x %x)\n", r, response[0], response[1]);
+    if (r > 90 || r < -90)
+    {
+        if (mTurnTarget > 0)
+            r = 10;
+        else
+            r = -10;
+    }
+    /*
     if (r > 45 || r < -45) // something's gone wrong, the roomba really isn't very good at this...
     {
         // try flipping them round, possibly it's cocked up and sent them out of order
@@ -218,7 +251,7 @@ const sint16_t Robot::getAngle (void) const
             // if it is just return a kind of sane number based on the FPS (hardcoded because why not). this is a disgusting solution to the problem.
             r = (response[0] & 0x80) ? -15 : 15;
         }
-    }
+    }*/
     
     return r;
 #else
@@ -264,19 +297,34 @@ void Robot::setMode (const RobotMode rm)
 void Robot::setSpeed (const sint16_t lVel, const sint16_t rVel)
 {
 #ifndef WHEEL_MOTOR_EMULATION
-    static sint16_t curr_lVel=0, curr_rVel=0;
+//    static sint16_t curr_lVel=0, curr_rVel=0;
     CHECK_ROBOTMODE(SAFE);
     
-    if (lVel != curr_lVel || rVel != curr_rVel)
+    if (lVel != mCurrentLeftVelocity || rVel != mCurrentRightVelocity)
     {
-        curr_lVel = lVel;
-        curr_rVel = rVel;
+        mCurrentLeftVelocity  = lVel;
+        mCurrentRightVelocity = rVel;
         uint8_t command[5] = {145u,
                               (uint8_t) (lVel >> 8), (uint8_t) (lVel & 0xFF),
                               (uint8_t) (rVel >> 8), (uint8_t) (rVel & 0xFF) };
-        mSI->writeBytes(command, sizeof(command));
+        mSI->writeBytes(command, 5);
     }
 #endif
+}
+
+
+void Robot::pause (void)
+{
+    mLeftVelocityBeforePause  = mCurrentLeftVelocity;
+    mRightVelocityBeforePause = mCurrentRightVelocity;
+    
+    setSpeed(0, 0);
+}
+
+
+void Robot::unpause (void)
+{
+    setSpeed(mLeftVelocityBeforePause, mRightVelocityBeforePause);
 }
 
 
