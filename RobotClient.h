@@ -31,7 +31,7 @@ public:
     ~RobotClient (void);
     
     void receiveFrame (void);
-    int  displayFrame (void);
+    int  displayFrame (int number);
     
     uint32_t getStreamingBufferSize (void) const;
 

@@ -37,14 +37,19 @@ void RobotClient::receiveFrame (void)
 }
 
 
-int RobotClient::displayFrame (void)
+int RobotClient::displayFrame (int number)
 {
     int retVal;
+    char filename[128];
+    sprintf(filename, "../Desktop/output_1/frame%d.png\0", number);
     
     if (mStreamingImage.empty())
         printf("ERROR: Image was empty, not displaying :(\n");
     else
+    {
         cv::imshow(STREAM_WINDOW_NAME, mStreamingImage);
+        cv::imwrite(filename, mStreamingImage);
+    }
     
     retVal = cvWaitKey(5);
     return retVal;
@@ -82,6 +87,7 @@ int main (void)
     uint32_t i_fps=0, i_kbps=0;
     float    CAfps=0, CAkbps=0;
     RobotClient rc;
+    int frame_count = 0;
     
     while (1)
     {
@@ -89,7 +95,7 @@ int main (void)
         
         // bulk of the loop
         rc.receiveFrame();
-        buttonPress = rc.displayFrame();
+        buttonPress = rc.displayFrame(frame_count++);
 /*        if (buttonPress >= 0)
             break;*/
         
